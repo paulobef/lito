@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Lito — Design de référence</title>
+<style>
+  :root {
+    --bg: #ffffff; --surface: #ffffff; --sidebar: #fbfcfd; --sidebar-hover: #eef1f4;
+    --border: #d2d7dc; --text: #10141a; --text-muted: #4b525a; --text-faint: #7b838b;
+    --bubble-bg: #eef1f4; --accent: #0a6e77; --accent-strong: #07535a;
+    --success: #1a7f37; --success-soft: #e3f3e6;
+    --warn: #9c6f22; --warn-soft: #f2ead6;
+    --danger: #b4432f; --danger-soft: #f6e6e2;
+  }
+  html.dark {
+    --bg: #14171c; --surface: #14171c; --sidebar: #191c22; --sidebar-hover: #232830;
+    --border: #2b313a; --text: #eef1f4; --text-muted: #a7afb8; --text-faint: #828a92;
+    --bubble-bg: #232830; --accent: #0a6e77; --accent-strong: #07535a;
+    --success: #3fb96a; --success-soft: #16321f;
+    --warn: #d9a441; --warn-soft: #3a2f14;
+    --danger: #e2695a; --danger-soft: #3a1f19;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text); font-size: 13px;
+  }
+  .meta-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; background: var(--sidebar); border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--text-muted);
+  }
+  .meta-bar button {
+    font: inherit; padding: 5px 12px; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text); cursor: pointer;
+  }
+  .meta-bar button:hover { background: var(--sidebar-hover); }
+
+  h2.section-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
+    margin: 28px 16px 10px;
+  }
+
+  /* Palette swatches */
+  .palette { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 16px 20px; }
+  .swatch { width: 128px; border: 1px solid var(--border); }
+  .swatch .chip { height: 48px; }
+  .swatch .label { padding: 6px 8px; font-size: 10.5px; color: var(--text-muted); }
+  .swatch .label b { display: block; color: var(--text); font-size: 11px; }
+
+  /* App mockup */
+  .app {
+    display: flex; flex-direction: column; height: 560px; border: 1px solid var(--border);
+    margin: 0 16px 28px; background: var(--bg);
+  }
+  .titlebar {
+    height: 38px; min-height: 38px; display: flex; align-items: center; gap: 10px;
+    padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  .titlebar .app-title { font-weight: 600; font-size: 12.5px; }
+  .titlebar .spacer { flex: 1; }
+  .status-model {
+    display: flex; align-items: center; gap: 6px; padding: 3px 10px;
+    border: 1px solid var(--border); font-size: 11px; color: var(--text-muted); cursor: pointer;
+  }
+  .status-dot { width: 7px; height: 7px; background: var(--success); }
+  .theme-toggle, .ping-btn {
+    font: inherit; font-size: 11px; padding: 4px 10px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-muted); cursor: pointer;
+  }
+  .theme-toggle:hover, .ping-btn:hover { background: var(--sidebar-hover); }
+
+  .columns { flex: 1; display: flex; min-height: 0; }
+
+  /* Session sidebar */
+  .col-sidebar {
+    width: 220px; min-width: 220px; background: var(--sidebar); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  .search-field {
+    margin: 10px; padding: 6px 8px; border: 1px solid var(--border); background: var(--surface);
+    font-size: 11.5px; color: var(--text-faint);
+  }
+  .group-label { padding: 10px 12px 4px; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+  .session-row { padding: 7px 12px; font-size: 12px; cursor: pointer; border-left: 2px solid transparent; }
+  .session-row .sub { font-size: 10.5px; color: var(--text-faint); }
+  .session-row:hover { background: var(--sidebar-hover); }
+  .session-row.active { background: var(--sidebar-hover); border-left-color: var(--text-muted); }
+  .sidebar-footer {
+    margin-top: auto; border-top: 1px solid var(--border); padding: 10px 12px;
+    font-size: 10.5px; color: var(--text-faint);
+  }
+  .sidebar-footer .undo-link { color: var(--text-muted); cursor: pointer; display: block; margin-bottom: 6px; }
+
+  /* Chat column */
+  .col-chat { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .chat-scroll { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .msg-user { align-self: flex-end; max-width: 70%; background: var(--bubble-bg); padding: 8px 12px; font-size: 12.5px; }
+  .msg-agent { max-width: 78%; font-size: 12.5px; line-height: 1.5; color: var(--text); }
+  .plan-chip {
+    align-self: flex-start; border: 1px solid var(--border); padding: 5px 10px; font-size: 11px;
+    color: var(--text-muted); cursor: pointer; background: var(--surface);
+  }
+  .plan-chip:hover { background: var(--sidebar-hover); }
+  .composer {
+    margin: 12px 16px 16px; display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--border); background: var(--surface); padding: 8px 10px;
+  }
+  .composer input { flex: 1; border: none; outline: none; background: transparent; font: inherit; color: var(--text); }
+  .composer input::placeholder { color: var(--text-faint); }
+  .send-btn {
+    border: none; padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 600;
+    background: var(--accent); color: #fbfbf8; cursor: pointer;
+  }
+  .send-btn.disabled { background: transparent; color: var(--text-faint); border: 1px solid var(--border); }
+
+  /* Plan inspector */
+  .col-plan { width: 300px; min-width: 300px; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; }
+  .plan-header { padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600; }
+  .plan-steps { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .step-card { display: flex; gap: 8px; border: 1px solid var(--border); padding: 8px; }
+  .op-badge {
+    width: 20px; height: 20px; min-width: 20px; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-family: Menlo, monospace;
+  }
+  .op-badge.success { background: var(--success-soft); color: var(--success); }
+  .op-badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .op-badge.danger { background: var(--danger-soft); color: var(--danger); }
+  .step-body { flex: 1; min-width: 0; }
+  .step-desc { font-family: Menlo, monospace; font-size: 10.5px; color: var(--text-muted); word-break: break-all; }
+  .status-badge { font-size: 10px; padding: 1px 6px; display: inline-block; margin-top: 4px; }
+  .status-badge.success { background: var(--success-soft); color: var(--success); }
+  .status-badge.warn { background: var(--warn-soft); color: var(--warn); }
+  .status-badge.danger { background: var(--danger-soft); color: var(--danger); }
+  .plan-actions { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+  .action-btn {
+    flex: 1; text-align: center; padding: 7px; border: 1px solid var(--border); background: var(--surface);
+    font: inherit; font-size: 11.5px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .action-btn:hover { background: var(--sidebar-hover); }
+  .action-btn.execute .dot { color: var(--success); }
+  .action-btn.reject .dot { color: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="meta-bar">
+  <span>Lito — design de référence (dérivé de <code>documentation/lito/design.md</code> et <code>crates/ui/ui/app-window.slint</code>)</span>
+  <button onclick="document.documentElement.classList.toggle('dark')">Basculer clair / sombre</button>
+</div>
+
+<h2 class="section-title">Palette</h2>
+<div class="palette">
+  <div class="swatch"><div class="chip" style="background:var(--bg); border-bottom:1px solid var(--border)"></div><div class="label"><b>bg / surface</b>fond pur</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--sidebar)"></div><div class="label"><b>sidebar</b>quasi = bg</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--sidebar-hover)"></div><div class="label"><b>sidebar-hover</b>ligne active</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--border)"></div><div class="label"><b>border</b>gris froid</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--text)"></div><div class="label"><b>text</b></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--text-muted)"></div><div class="label"><b>text-muted</b></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--text-faint)"></div><div class="label"><b>text-faint</b></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--bubble-bg)"></div><div class="label"><b>bubble-bg</b>bulle user</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--accent)"></div><div class="label"><b>accent</b>CTA uniquement</div></div>
+  <div class="swatch"><div class="chip" style="background:var(--accent-strong)"></div><div class="label"><b>accent-strong</b></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--success)"></div><div class="label"><b>success</b></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--warn)"></div><div class="label"><b>warn</b></div></div>
+  <div class="swatch"><div class="chip" style="background:var(--danger)"></div><div class="label"><b>danger</b></div></div>
+</div>
+
+<h2 class="section-title">Fenêtre principale (3 colonnes)</h2>
+<div class="app">
+  <div class="titlebar">
+    <span class="app-title">Lito</span>
+    <div class="spacer"></div>
+    <div class="status-model"><span class="status-dot"></span> llama3.1:8b</div>
+    <button class="theme-toggle">Sombre</button>
+    <button class="ping-btn">Ping</button>
+  </div>
+  <div class="columns">
+    <div class="col-sidebar">
+      <div class="search-field">Rechercher…</div>
+      <div class="group-label">Aujourd'hui</div>
+      <div class="session-row active">Organiser le dossier Téléchargements<div class="sub">6 étapes</div></div>
+      <div class="session-row">Renommer les factures 2026<div class="sub">3 étapes</div></div>
+      <div class="group-label">Hier</div>
+      <div class="session-row">Archiver les captures d'écran<div class="sub">4 étapes</div></div>
+      <div class="sidebar-footer">
+        <span class="undo-link">↺ Annuler la dernière opération</span>
+        Tout s'exécute en local
+      </div>
+    </div>
+
+    <div class="col-chat">
+      <div class="chat-scroll">
+        <div class="msg-user">Range les fichiers de Téléchargements par type dans des sous-dossiers.</div>
+        <div class="msg-agent">
+          Je propose de créer des dossiers Images, Documents et Archives, puis d'y déplacer les fichiers correspondants.
+        </div>
+        <div class="plan-chip">Plan proposé · 6 étapes</div>
+      </div>
+      <div class="composer">
+        <input type="text" placeholder="Écrire un message…" />
+        <button class="send-btn disabled">Envoyer</button>
+      </div>
+    </div>
+
+    <div class="col-plan">
+      <div class="plan-header">Plan · 6 étapes</div>
+      <div class="plan-steps">
+        <div class="step-card">
+          <div class="op-badge success">▢</div>
+          <div class="step-body">
+            <div class="step-desc">mkdir ~/Downloads/Images</div>
+            <span class="status-badge success">Fait</span>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="op-badge warn">→</div>
+          <div class="step-body">
+            <div class="step-desc">move photo_042.png → Images/</div>
+            <span class="status-badge warn">En cours</span>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="op-badge warn">×</div>
+          <div class="step-body">
+            <div class="step-desc">delete tmp_export.crdownload</div>
+            <span class="status-badge warn">En attente</span>
+          </div>
+        </div>
+        <div class="step-card">
+          <div class="op-badge danger">✎</div>
+          <div class="step-body">
+            <div class="step-desc">rename invoice(1).pdf → invoice_2026-08.pdf</div>
+            <span class="status-badge danger">Échec</span>
+          </div>
+        </div>
+      </div>
+      <div class="plan-actions">
+        <div class="action-btn reject"><span class="dot">×</span> Rejeter</div>
+        <div class="action-btn execute"><span class="dot">▶</span> Exécuter</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="section-title">Notes de lecture</h2>
+<div style="padding: 0 16px 32px; max-width: 640px; color: var(--text-muted); line-height:1.6; font-size:12px;">
+  L'accent (teal <code>#0a6e77</code>) n'apparaît que sur le bouton d'envoi actionnable — nulle part
+  ailleurs (pas sur la ligne de session active, pas sur les badges de statut). Angles droits partout,
+  bordures fines plutôt qu'ombres, police système (San Francisco), Menlo pour les chemins de fichiers.
+  Ce mockup est un reflet direct de <code>global Palette</code> dans <code>app-window.slint</code> —
+  toute divergence doit être corrigée ici, pas l'inverse.
+</div>
+
+</body>
+</html>

@@ -1,0 +1,19 @@
+[package]
+name = "lito-ui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+slint = { workspace = true, features = ["renderer-skia"] }
+lito-protocol = { path = "../protocol" }
+copypasta = { workspace = true }
+pulldown-cmark = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+
+[build-dependencies]
+slint-build = { workspace = true }

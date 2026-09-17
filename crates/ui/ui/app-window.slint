@@ -1,0 +1,3108 @@
+import { ListView, ScrollView, Palette as StdPalette } from "std-widgets.slint";
+
+// Bundled body face for the reading surface (assistant replies, reasoning
+// trace, plan-step prose, dialog copy). Chrome stays on the macOS system font.
+// Open Sans is here for ONE measured reason: Slint's skia text layout stacks
+// wrapped lines at the font's `ascent - descent` (the line-gap term is
+// dropped), and `StyledText` - which renders all prose/lists here - exposes no
+// `line-height`/`line-height-factor` on 1.17.1 (nor on the 1.18 beta, where it
+// was cut from PR #12649). Open Sans' vertical metrics give ~+15% line advance
+// vs the system font at the same size (measured: ~19.2px vs ~16.5px at
+// font-lg), which is the only lever left for looser prose leading without
+// upgrading Slint. See documentation/lito/design.md, "Police de corps".
+// SIL OFL 1.1 - crates/ui/ui/fonts/OFL.txt.
+import "fonts/OpenSans-Regular.ttf";
+import "fonts/OpenSans-Bold.ttf";
+import "fonts/OpenSans-Italic.ttf";
+import "fonts/OpenSans-BoldItalic.ttf";
+
+// Design tokens - cool-neutral/Carbon-inspired palette, with a light and a
+// dark variant selected by `dark`. See documentation/lito/design.md for the
+// rationale: near-pure-white/near-black surfaces, a very light corner radius
+// on cards/controls (not the structural panels), accent color reserved for
+// the one real call-to-action (send), semantic colors for plan-step status
+// (success/warn/danger), everything else neutral gray - the dark variant
+// follows the same rules (still cool gray, not warm; accent stays CTA-only)
+// rather than being a separate design direction.
+export global Palette {
+    in-out property <bool> dark: false;
+
+    in-out property <color> bg: dark ? #14171c : #ffffff;
+    in-out property <color> surface: dark ? #14171c : #ffffff;
+    in-out property <color> sidebar: dark ? #191c22 : #fbfcfd;
+    in-out property <color> sidebar-hover: dark ? #232830 : #eef1f4;
+    in-out property <color> border: dark ? #2b313a : #d2d7dc;
+    in-out property <color> text: dark ? #eef1f4 : #10141a;
+    in-out property <color> text-muted: dark ? #a7afb8 : #4b525a;
+    in-out property <color> text-faint: dark ? #828a92 : #7b838b;
+    in-out property <color> bubble-bg: dark ? #232830 : #eef1f4;
+
+    // Interaction ramp. `sidebar-hover` used to carry four unrelated roles at
+    // once - hover, press, the "Raisonnement" block fill and the
+    // active-session highlight - which made hover and press literally the
+    // same pixel value, i.e. indistinguishable.
+    //
+    // The values are measured, not picked: a first attempt used a lighter
+    // #f2f4f7 hover, which is only 9 units from the sidebar's own #fbfcfd
+    // and sampled as barely perceptible, *and* landed lighter than the
+    // #eef1f4 active-session fill - so pointing at a row read as less
+    // emphasis than the row already selected, and pressing it jumped past
+    // the state it was about to become. The ramp is now monotonic and every
+    // step is >= 10 units, on white and on the near-white sidebar alike:
+    //
+    //   rest #ffffff / #fbfcfd  ->  hover #eef1f4  ->  press/selected #e4e8ed
+    //
+    // For a control sitting *on* a filled block (the reasoning box, whose
+    // fill is itself #eef1f4) a hover of #eef1f4 would be invisible - those
+    // pass `hover-bg`/`press-bg` one step deeper. See `TextButton`.
+    in-out property <color> surface-hover: dark ? #232830 : #eef1f4;
+    in-out property <color> surface-press: dark ? #2b313a : #e4e8ed;
+    in-out property <color> border-hover: dark ? #3c434e : #b6bdc4;
+    // Focus ring for text fields - a strong neutral, deliberately *not* the
+    // accent: accent stays reserved for the one real CTA (send). See
+    // documentation/lito/design.md.
+    in-out property <color> focus-ring: dark ? #6b747e : #8d959d;
+
+    in-out property <color> accent: #0a6e77;
+    in-out property <color> accent-strong: #07535a;
+    in-out property <color> accent-press: #053f45;
+
+    in-out property <color> success: dark ? #3fb96a : #1a7f37;
+    in-out property <color> success-soft: dark ? #16321f : #e3f3e6;
+    in-out property <color> warn: dark ? #d9a441 : #9c6f22;
+    in-out property <color> warn-soft: dark ? #3a2f14 : #f2ead6;
+    in-out property <color> danger: dark ? #e2695a : #b4432f;
+    in-out property <color> danger-soft: dark ? #3a1f19 : #f6e6e2;
+
+    // Code/command syntax highlighting (see `highlight.rs`, `CodeSpan`,
+    // `Syntax`). Three hues, chosen spaced away from every other color this
+    // palette already assigns meaning to - `accent`'s teal (~185°),
+    // `success`'s green (~130°), `warn`'s olive (~45°), `danger`'s
+    // red-orange (~10°) - so a highlighted token never reads as a status or
+    // borrows the one hue reserved for the send button (see "Règle de
+    // couleur" in design.md). Comments deliberately reuse `text-faint`
+    // (italic) rather than adding a fourth hue - a comment is meant to
+    // recede, not stand out.
+    in-out property <color> syntax-keyword: dark ? #b39ddb : #5d4a91;
+    in-out property <color> syntax-string: dark ? #8fb0e0 : #35578f;
+    in-out property <color> syntax-number: dark ? #d99bc4 : #99447a;
+    in-out property <color> syntax-function: dark ? #9fb3c8 : #3d5266;
+}
+
+// Type scale and spacing ramp. Slint ships no reset and no default scale, so
+// without a single place to name these, values drift: this file previously had
+// 8 distinct font sizes (12.8px, 11.5px, 9.5px, ...) and 17 spacing values
+// (including 0.4px/0.5px/0.6px paddings) - all of them hand-compensation for
+// misalignment that wasn't visible at the time. Four text roles and a 4px
+// spacing ramp replace them; add a token here rather than a literal at a call
+// site.
+export global Theme {
+    // Text roles, smallest to largest.
+    in-out property <length> font-xs: 10px;   // meta: date groups, step counts, footer
+    in-out property <length> font-sm: 11px;   // secondary UI chrome: labels, chips, paths
+    in-out property <length> font-md: 12px;   // primary UI chrome: titles, buttons
+    in-out property <length> font-lg: 14px;   // content: chat messages, composer input
+    // The one tracking value, for the uppercase micro-labels.
+    in-out property <length> tracking: 0.5px;
+    // The bundled body face (see the font imports at the top of this file).
+    // Used on the reading surface only - `CopiableText`, the reply `StyledText`
+    // and the composer input - never on chrome (`Label`, buttons), which keeps
+    // the macOS system font. Empty string = fall back to the system font.
+    in-out property <string> body-font: "Open Sans";
+    // Line box as a multiple of font-size, used by `Label`/`CopiableText` (see
+    // `Label`'s comment for why a bare `Text` is not enough).
+    in-out property <float> line-height: 1.45;
+
+    // Spacing ramp - every padding/spacing/gap in this file is one of these.
+    in-out property <length> space-1: 4px;
+    in-out property <length> space-2: 8px;
+    in-out property <length> space-3: 12px;
+    in-out property <length> space-4: 16px;
+    in-out property <length> space-5: 20px;
+    in-out property <length> space-6: 24px;
+
+    // A very light corner radius for self-contained cards/controls (buttons,
+    // inputs, chips, bubbles, popups) - deliberately not applied to the
+    // structural panels (titlebar, sidebar, main columns) or to dividers,
+    // which stay flush with the window edges and with each other. See
+    // documentation/lito/design.md.
+    in-out property <length> radius: 4px;
+
+    // Interaction animation durations. Hover/press feedback uses `anim-fast`
+    // so it still feels immediate (anything slower reads as lag on a control
+    // you are actively pointing at); state changes the user didn't directly
+    // trigger use `anim-med`.
+    in-out property <duration> anim-fast: 90ms;
+    in-out property <duration> anim-med: 160ms;
+
+    // Structural sizes shared by elements that must line up across columns.
+    in-out property <length> titlebar-h: 38px;
+    in-out property <length> sidebar-w: 220px;
+    in-out property <length> plan-w: 300px;
+    // The native macOS window uses a transparent, full-size-content titlebar
+    // (see `install_macos_titlebar_backend` in `crates/app/src/main.rs`) so
+    // there's no separate OS-drawn strip that fails to follow this app's own
+    // (OS-independent) dark toggle - the traffic-light buttons float
+    // directly over this row's top-left corner instead. This is how much
+    // horizontal space they need so "Lito" doesn't render underneath them.
+    in-out property <length> traffic-light-w: 78px;
+    // Comfortable line length for the assistant reply body and the reasoning
+    // trace. `StyledText` (prose + lists) has no `line-height`/leading knob on
+    // 1.17.1 nor on the 1.18 beta (see design.md, 2026-09-09 bis), so once the
+    // between-block ramp is as wide as it can be
+    // without the reply falling apart, a bounded measure is the remaining
+    // lever against a wall-of-text feel: shorter lines read looser at the same
+    // leading. Applied by wrapping the body in `HorizontalLayout { alignment:
+    // start }` with this as `max-width` (a bare `max-width` on a `VerticalLayout`
+    // child of a `VerticalLayout` is ignored - verified). ~78 chars at font-lg.
+    in-out property <length> read-measure: 560px;
+
+    // How far above the bottom of the chat the viewport may sit and still
+    // count as "following the reply". Bigger than a scroll wheel notch, so a
+    // single detent doesn't detach the view; smaller than a message, so
+    // scrolling up to read something actually detaches it.
+    in-out property <length> stick-slack: 24px;
+
+    // Height of the composer block in the chat column *and* of the sidebar
+    // footer next to it: space-3 above + 36px control + space-4 below. Both
+    // read this token so the divider above them lands on one continuous line
+    // instead of two independently-computed near-misses.
+    in-out property <length> bottom-bar-h: 64px;
+
+    // `Label`'s `vertical-alignment: center` centers text using the font's
+    // ascent/descent metrics, so a short string with no descender (most
+    // French UI chrome: no g/j/p/q/y) has its *ink* sit slightly above true
+    // center - measured ~0.6-1.2px high, reproducibly, across every centered
+    // button in this file, independent of renderer backend. `+ 1px` is the
+    // integer-pixel nudge that minimized the measured error in both
+    // directions tested (0px undershoots high by ~0.6px, 1px overshoots low
+    // by ~0.4px, 2px would be worse). Apply via a `y` binding at the call
+    // site (not on `Label`'s own root - `parent` isn't accessible there, see
+    // the slint skill's gotcha on it) to any label that is both short and
+    // centered in a box taller than its own text: button/pill labels, not
+    // body copy, where an occasional descender makes the correction moot.
+    public pure function optical-center-y(parent-height: length, self-height: length) -> length {
+        return (parent-height - self-height) / 2 + 1px;
+    }
+}
+
+// Maps a `highlight::TokenClass::as_str()` value to how `CodeSpan` renders
+// it. One shared place rather than duplicating the branch at every call site
+// (a code block's lines, the plan panel's `"$ <command>"` line, ...) - the
+// one thing that varies between them is what "plain" (no special role)
+// should look like, since that already differs by context before this
+// existed (full-strength `Palette.text` in a code block's body, the muted
+// `Palette.text-muted` the plan panel's command line already used) - so
+// `color` takes it as a fallback argument instead of hardcoding one.
+export global Syntax {
+    public pure function color(class: string, plain-color: color) -> color {
+        return class == "keyword" ? Palette.syntax-keyword
+            : class == "string" ? Palette.syntax-string
+            : class == "comment" ? Palette.text-faint
+            : class == "number" ? Palette.syntax-number
+            : class == "function" ? Palette.syntax-function
+            : plain-color;
+    }
+    public pure function italic(class: string) -> bool {
+        return class == "comment";
+    }
+    public pure function weight(class: string) -> int {
+        return class == "function" ? 700 : 400;
+    }
+}
+
+// A single-line UI label. Use this, not a bare `Text`, for any chrome text.
+//
+// A `Text` element's own height is exactly its font-size, and glyphs are
+// clipped to that box - so any mark that ascends above cap height is cut off.
+// In French chrome that means every uppercase accent: "PLAN PROPOSÉ" rendered
+// as "PLAN PROPOSE" and "Échec" as "Echec", with no warning and no diagnostic.
+// Verified on Slint 1.17.1 under both femtovg and skia. A `line-height`
+// multiple of the font size plus vertical centering gives the mark room; as a
+// `min-height` (not `height` - Slint rejects binding both) it also works for
+// layout children, which stretch beyond it and center their text inside.
+component Label inherits Text {
+    min-height: self.font-size * Theme.line-height;
+    vertical-alignment: center;
+    color: Palette.text;
+}
+
+// Read-only, copiable text for anything generated by the user or the agent
+// (chat content, plan step descriptions, ...) - a plain `Text` element can't
+// be selected/copied, but a `TextInput` with `read-only: true` can while
+// still being un-editable. Use this instead of `Text` for that content.
+//
+// `height`/`vertical-alignment` here are the same accent-clipping fix as in
+// `Label`: a multi-line `TextInput` top-aligns its first line at y=0, so an
+// "É" on the *first* line loses its accent. The extra space-1 of box plus
+// centering shifts the whole block down half of it. `preferred-height` is the
+// wrapped content height, so wrapping and growth are unaffected.
+component CopiableText inherits TextInput {
+    read-only: true;
+    single-line: false;
+    wrap: word-wrap;
+    color: Palette.text;
+    // The bundled body face - this is reading content, not chrome. A code/
+    // command instance overrides this back to "Menlo, monospace" locally, and
+    // that override still wins.
+    font-family: Theme.body-font;
+    font-size: Theme.font-lg;
+    vertical-alignment: center;
+    height: self.preferred-height + Theme.space-1;
+}
+
+// One colored token inside a highlighted code line or command (see
+// `highlight.rs` for the classification, `Syntax` above for the color
+// mapping). A single-line `TextInput`, not a `Text`: `Text`/`TextInput` both
+// have one uniform `color`, so per-token color means one small text element
+// per token rather than one per line - `TextInput` is the one of the two
+// that keeps click-drag selection, at least *within* a token, which a plain
+// `Text` run would drop entirely. Always a call-site's `Theme.font-md`/
+// `font-xs` alongside `Menlo, monospace` - see `MessageBlock`'s "code" kind
+// and the plan panel's `command-line`.
+component CodeSpan inherits TextInput {
+    in property <string> cls: "plain";
+    in property <color> plain-color: Palette.text;
+    read-only: true;
+    single-line: true;
+    wrap: no-wrap;
+    horizontal-stretch: 0;
+    font-family: "Menlo, monospace";
+    color: Syntax.color(root.cls, root.plain-color);
+    font-italic: Syntax.italic(root.cls);
+    font-weight: Syntax.weight(root.cls);
+}
+
+// A text-only action (Copier, Afficher, Ping, the plan panel's close mark).
+//
+// Each of these was previously a bare `Label` with a `TouchArea` *inside* it,
+// which made the clickable region exactly the glyph box - a few pixels tall,
+// with no cursor change and no hover feedback whatsoever. Padding the hit
+// area is not cosmetic here: a hover highlight the exact size of the text
+// reads as a rendering bug rather than as a button, and a 14px-wide close
+// mark is genuinely hard to hit. The box is sized from the label's own
+// measured height (like `StatusBadge`) rather than from the font size, so it
+// keeps `Label`'s accent headroom.
+component TextButton inherits Rectangle {
+    in property <string> text;
+    in property <length> font-size: Theme.font-sm;
+    in property <int> font-weight: 400;
+    in property <color> text-color: Palette.text-muted;
+    in property <bool> enabled: true;
+    // Force a square box (for single-glyph marks like the plan panel's "x",
+    // where a text-width-derived box would be a lopsided sliver).
+    in property <bool> square: false;
+    // Override when this button sits on an already-filled block rather than
+    // on a plain surface - the default hover fill equals the standard block
+    // fill, so it would be invisible there. See `Palette`'s ramp comment.
+    in property <color> hover-bg: Palette.surface-hover;
+    in property <color> press-bg: Palette.surface-press;
+    callback clicked();
+
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-radius: Theme.radius;
+    height: label.height + 2 * Theme.space-1;
+    width: root.square ? self.height : label.preferred-width + 2 * Theme.space-2;
+    opacity: root.enabled ? 1.0 : 0.5;
+    background: !root.enabled ? #00000000
+        : touch.pressed ? root.press-bg
+        : touch.has-hover ? root.hover-bg
+        : #00000000;
+
+    animate background { duration: Theme.anim-fast; easing: ease-out; }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+
+    label := Label {
+        text: root.text;
+        font-size: root.font-size;
+        font-weight: root.font-weight;
+        horizontal-alignment: center;
+        color: touch.has-hover && root.enabled ? Palette.text : root.text-color;
+        y: Theme.optical-center-y(parent.height, self.height);
+        animate color { duration: Theme.anim-fast; easing: ease-out; }
+    }
+}
+
+// Generic chrome icons (Lucide, MIT) - distinct from `OpIcon` above, which is
+// keyed by filesystem `Operation` and used only in the plan-step list. This
+// one backs `IconButton` and the few `ActionButton`/inline glyphs that used
+// to be a bare Unicode character in a `Label` (×, ✓, ↺): those render
+// correctly on macOS today, but depend on the system font the same way the
+// operation glyphs in `OpIcon`'s own comment did before real SVGs replaced
+// them - a real asset keeps the stroke weight identical to every other icon
+// in the app instead of following font metrics.
+component Icon inherits Image {
+    in property <string> name;
+    width: 14px;
+    height: 14px;
+    image-fit: contain;
+    source: name == "sun" ? @image-url("icons/sun.svg")
+        : name == "moon" ? @image-url("icons/moon.svg")
+        : name == "settings" ? @image-url("icons/settings.svg")
+        : name == "activity" ? @image-url("icons/activity.svg")
+        : name == "copy" ? @image-url("icons/copy.svg")
+        : name == "code" ? @image-url("icons/code.svg")
+        : name == "align-left" ? @image-url("icons/align-left.svg")
+        : name == "chevron-down" ? @image-url("icons/chevron-down.svg")
+        : name == "chevron-up" ? @image-url("icons/chevron-up.svg")
+        : name == "x" ? @image-url("icons/x.svg")
+        : name == "play" ? @image-url("icons/play.svg")
+        : name == "undo-2" ? @image-url("icons/undo-2.svg")
+        : name == "check" ? @image-url("icons/check.svg")
+        : name == "brain" ? @image-url("icons/brain.svg")
+        : name == "loader" ? @image-url("icons/loader.svg")
+        : @image-url("icons/plus.svg");
+}
+
+// Icon-only ghost action - the icon equivalent of `TextButton`, for a chrome
+// action whose icon alone is unambiguous ("Copier", the theme toggle, the
+// raisonnement disclosure chevron). Same ghost visual language and hover/press
+// ramp as `TextButton`, but sized as a square around the icon rather than
+// around measured text width. Carries `accessible-label` since, unlike
+// `TextButton`, there is no visible text left for a screen reader to read.
+component IconButton inherits Rectangle {
+    in property <string> icon;
+    // Not rendered - screen-reader text only. Always pass one.
+    in property <string> label;
+    in property <length> icon-size: 14px;
+    in property <color> icon-color: Palette.text-muted;
+    in property <bool> enabled: true;
+    // Same override purpose as `TextButton`'s - see there.
+    in property <color> hover-bg: Palette.surface-hover;
+    in property <color> press-bg: Palette.surface-press;
+    callback clicked();
+
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-enabled: root.enabled;
+
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-radius: Theme.radius;
+    height: root.icon-size + 2 * Theme.space-2;
+    width: self.height;
+    opacity: root.enabled ? 1.0 : 0.5;
+    background: !root.enabled ? #00000000
+        : touch.pressed ? root.press-bg
+        : touch.has-hover ? root.hover-bg
+        : #00000000;
+
+    animate background { duration: Theme.anim-fast; easing: ease-out; }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+
+    Icon {
+        name: root.icon;
+        width: root.icon-size;
+        height: root.icon-size;
+        colorize: touch.has-hover && root.enabled ? Palette.text : root.icon-color;
+        animate colorize { duration: Theme.anim-fast; easing: ease-out; }
+    }
+}
+
+// The "still generating" caret: a blinking block shown at the end of an
+// assistant message while its tokens are still arriving. Without it a stream
+// that has paused (a slow model, a filesystem query round-trip) is
+// indistinguishable from one that has finished - the text simply stops, and
+// the only other signal is the composer being disabled at the far bottom of
+// the window.
+//
+// Driven by a `Timer` toggling a boolean rather than by an infinite `animate`:
+// an animation needs a property that actually changes to have something to
+// interpolate between, so the toggle is the source and the animation only
+// softens the edges of it.
+component StreamingCaret inherits Rectangle {
+    width: 7px;
+    height: Theme.font-lg;
+    horizontal-stretch: 0;
+    border-radius: 1px;
+    background: on ? Palette.text-muted : #00000000;
+
+    private property <bool> on: true;
+
+    animate background { duration: Theme.anim-fast; easing: ease-out; }
+
+    Timer {
+        interval: 520ms;
+        running: true;
+        triggered => { on = !on; }
+    }
+}
+
+// The "waiting on something that doesn't stream" loader: a reconnaissance
+// command or a filesystem query is running and the model is blocked on its
+// result, or a plan step is mid-execution. Unlike `StreamingCaret` (which marks
+// a stream that has *paused*), this marks work with no token flow at all, so it
+// spins rather than blinks. Same rationale for the drive mechanism: a `Timer`
+// steps `angle` rather than an infinite `animate` (which needs two endpoints to
+// interpolate between); 30deg every 80ms reads as a continuous rotation.
+component Spinner inherits Rectangle {
+    in property <length> size: 14px;
+    in property <color> tint: Palette.text-faint;
+    private property <angle> angle: 0deg;
+
+    width: root.size;
+    height: root.size;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+
+    // The rotation lives on the inner Image, not the root: `transform-rotation`
+    // is silently ignored on a component's root element.
+    Image {
+        width: root.size;
+        height: root.size;
+        image-fit: contain;
+        source: @image-url("icons/loader.svg");
+        colorize: root.tint;
+        transform-rotation: root.angle;
+    }
+
+    Timer {
+        interval: 80ms;
+        running: true;
+        triggered => { root.angle = root.angle < 330deg ? root.angle + 30deg : 0deg; }
+    }
+}
+
+// 1px hairlines. Every separator in this file is one of these, drawn as its
+// own element - *not* a `border-width` on the enclosing box. A container
+// border draws on all four sides, so it doubles up against the neighbouring
+// section's divider (a visible 2px line) and paints a stray frame along the
+// window edges. Each one only pins its own axis; the layout it sits in
+// stretches it along the other.
+component HDivider inherits Rectangle {
+    height: 1px;
+    vertical-stretch: 0;
+    background: Palette.border;
+}
+
+component VDivider inherits Rectangle {
+    width: 1px;
+    horizontal-stretch: 0;
+    background: Palette.border;
+}
+
+// The plan-step operation icons, as real SVG assets rather than text glyphs.
+// The system font covers only 3 of the 7 operations - `▢` MKDIR, `⧉` COPY,
+// `✎` RENAME and `▤` WRITE_FILE render as *nothing at all* (not even a tofu
+// box), so those badges were silently empty. See design.md.
+component OpIcon inherits Image {
+    in property <string> operation;
+    width: 14px;
+    height: 14px;
+    image-fit: contain;
+    source: operation == "MKDIR" ? @image-url("icons/mkdir.svg")
+        : operation == "MOVE" ? @image-url("icons/move.svg")
+        : operation == "COPY" ? @image-url("icons/copy.svg")
+        : operation == "DELETE" ? @image-url("icons/delete.svg")
+        : operation == "RENAME" ? @image-url("icons/rename.svg")
+        : operation == "SYMLINK" ? @image-url("icons/symlink.svg")
+        : operation == "RUN_COMMAND" ? @image-url("icons/run-command.svg")
+        : @image-url("icons/write-file.svg");
+}
+
+// Flat, bordered composer field + send button, styled as one unit (matches
+// the design mockup's single-outline input group). Wraps a raw `TextInput`
+// rather than the std-widgets `LineEdit` because `LineEdit`'s native chrome
+// (rounded corners, platform background) can't be fully re-skinned - see
+// this repo's design notes on std-widgets constraints.
+component Composer inherits Rectangle {
+    in property <string> placeholder;
+    in-out property <string> text: "";
+    in property <bool> enabled: true;
+    callback accepted();
+
+    private property <bool> active: root.text != "" && root.enabled;
+
+    background: Palette.surface;
+    border-width: 1px;
+    // The composer had no visible focus state at all - `has-focus` was read
+    // only to hide the placeholder - so a focused and an unfocused field were
+    // pixel-identical. A neutral ring, not the accent one (accent is the send
+    // button's alone).
+    border-color: input.has-focus ? Palette.focus-ring : Palette.border;
+    border-radius: Theme.radius;
+    height: 36px;
+
+    animate border-color { duration: Theme.anim-fast; easing: ease-out; }
+
+    HorizontalLayout {
+        padding-left: Theme.space-3;
+        padding-right: Theme.space-1;
+        spacing: Theme.space-2;
+
+        input := TextInput {
+            text <=> root.text;
+            enabled: root.enabled;
+            single-line: true;
+            vertical-alignment: center;
+            // Match the reading surface: what you type here renders in the
+            // user bubble (a `CopiableText`), also on the body face.
+            font-family: Theme.body-font;
+            font-size: Theme.font-lg;
+            color: Palette.text;
+            accepted => { root.accepted(); }
+        }
+
+        // The button is centred by its own wrapper layout rather than by the
+        // row's padding: a fixed `height` on a direct child of a
+        // `HorizontalLayout` is honoured but *top*-aligned (verified), which
+        // is what left the send affordance sitting high in its field.
+        VerticalLayout {
+            alignment: center;
+
+            send := Rectangle {
+                width: 28px;
+                height: 28px;
+                border-radius: Theme.radius;
+                background: !root.active ? Palette.surface-hover
+                    : send-touch.pressed ? Palette.accent-press
+                    : send-touch.has-hover ? Palette.accent-strong
+                    : Palette.accent;
+
+                // `anim-med`, not `anim-fast`: this one also animates the
+                // rest-state change from inactive-gray to accent when the
+                // field goes from empty to non-empty, which is not a pointer
+                // interaction and looks abrupt at 90ms.
+                animate background { duration: Theme.anim-med; easing: ease-out; }
+
+                send-touch := TouchArea {
+                    enabled: root.active;
+                    mouse-cursor: root.active ? MouseCursor.pointer : MouseCursor.default;
+                    clicked => { root.accepted(); }
+                }
+
+                Label {
+                    text: "→";
+                    font-size: Theme.font-lg;
+                    horizontal-alignment: center;
+                    color: root.active ? #fbfbf8 : Palette.text-faint;
+                    animate color { duration: Theme.anim-med; easing: ease-out; }
+                }
+            }
+        }
+    }
+
+    if root.text == "" && !input.has-focus: Label {
+        x: Theme.space-3;
+        y: 0px;
+        height: parent.height;
+        text: root.placeholder;
+        color: Palette.text-faint;
+        font-family: Theme.body-font;
+        font-size: Theme.font-lg;
+    }
+}
+
+// Bordered, no-button search input - a lighter sibling of `Composer` for the
+// session sidebar's filter field.
+component SearchField inherits Rectangle {
+    in property <string> placeholder;
+    in-out property <string> text: "";
+    callback edited(string);
+
+    // Filled rather than outlined at rest (one less hairline in a sidebar
+    // that had three stacked dividers), with the border kept at 1px but
+    // transparent so revealing it on focus animates a color rather than a
+    // geometry change.
+    background: input.has-focus ? Palette.surface : Palette.surface-hover;
+    border-width: 1px;
+    border-color: input.has-focus ? Palette.focus-ring : #00000000;
+    border-radius: Theme.radius;
+    height: 28px;
+
+    animate background, border-color { duration: Theme.anim-fast; easing: ease-out; }
+
+    input := TextInput {
+        x: Theme.space-2;
+        y: 0px;
+        width: parent.width - 2 * Theme.space-2;
+        height: parent.height;
+        single-line: true;
+        vertical-alignment: center;
+        font-size: Theme.font-md;
+        color: Palette.text;
+        text <=> root.text;
+        edited => { root.edited(self.text); }
+    }
+
+    if root.text == "" && !input.has-focus: Label {
+        x: Theme.space-2;
+        y: 0px;
+        height: parent.height;
+        text: root.placeholder;
+        color: Palette.text-faint;
+        font-size: Theme.font-md;
+    }
+}
+
+export enum ActionTone { neutral, success, danger }
+
+// Icon-led secondary action (Execute / Undo / Reject), drawn as a *ghost*
+// button: no border and no fill at rest, revealing a surface only on hover
+// and a deeper one on press. Deliberately never filled with the accent color
+// - only the composer's send affordance is a "real" CTA per this project's
+// color rules; the semantic tone lives in the icon alone.
+//
+// Sized to its own content (`horizontal-stretch: 0` + a width read off the
+// inner row) rather than stretched by the enclosing layout: a ghost button
+// that fills its share of the panel lights up half the column on hover, which
+// reads as a selected region rather than as a button.
+component ActionButton inherits Rectangle {
+    in property <string> label;
+    in property <string> icon;
+    in property <ActionTone> tone: ActionTone.neutral;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    private property <color> tone-color: tone == ActionTone.success ? Palette.success : tone == ActionTone.danger ? Palette.danger : Palette.text-muted;
+
+    border-radius: Theme.radius;
+    background: !root.enabled ? #00000000
+        : touch.pressed ? Palette.surface-press
+        : touch.has-hover ? Palette.surface-hover
+        : #00000000;
+    opacity: enabled ? 1.0 : 0.5;
+    height: 30px;
+    horizontal-stretch: 0;
+    width: row.preferred-width;
+
+    animate background { duration: Theme.anim-fast; easing: ease-out; }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? MouseCursor.pointer : MouseCursor.default;
+        clicked => { root.clicked(); }
+    }
+
+    // Content wrapped in a `VerticalLayout { alignment: center }`, not a bare
+    // `HorizontalLayout` with vertical padding: a padded `HorizontalLayout`
+    // still cross-axis-stretches to the *full* row height minus that
+    // padding (here 30px - 2*space-2 = 14px), which is shorter than the
+    // labels' own `min-height` (~15-17px at these font sizes) - min-height
+    // does not win that fight, so the label was measurably squeezed and
+    // mis-centered (~2px high, worse than the plain optical bias below).
+    // Wrapping the row lets it take its own natural (unsquashed) height and
+    // centers *that* within the full 30px instead.
+    VerticalLayout {
+        alignment: center;
+
+        row := HorizontalLayout {
+            alignment: center;
+            spacing: Theme.space-1;
+            padding-left: Theme.space-3;
+            padding-right: Theme.space-3;
+
+            VerticalLayout {
+                alignment: center;
+
+                Icon {
+                    name: root.icon;
+                    width: 13px;
+                    height: 13px;
+                    colorize: tone-color;
+                }
+            }
+
+            Label {
+                text: root.label;
+                font-size: Theme.font-sm;
+                font-weight: 600;
+                y: Theme.optical-center-y(parent.height, self.height);
+            }
+        }
+    }
+}
+
+// Small status pill for a plan step - color follows the standard semantic
+// mapping (done = green, pending/running = yellow, error = red) rather than
+// the accent color. Sized to its own text: as a plain layout child it stretched
+// to every pixel of leftover row width, which read as a colored banner rather
+// than a pill.
+component StatusBadge inherits Rectangle {
+    in property <string> status;
+
+    private property <color> fg: status == "done" ? Palette.success : status == "error" ? Palette.danger : Palette.warn;
+    private property <color> bg: status == "done" ? Palette.success-soft : status == "error" ? Palette.danger-soft : Palette.warn-soft;
+
+    background: bg;
+    border-radius: Theme.radius;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    width: label.preferred-width + 2 * Theme.space-2;
+    height: label.height + Theme.space-1;
+
+    label := Label {
+        text: status == "done" ? "Fait" : status == "error" ? "Échec" : status == "running" ? "En cours" : "En attente";
+        color: fg;
+        font-size: Theme.font-xs;
+        font-weight: 700;
+        letter-spacing: Theme.tracking;
+        horizontal-alignment: center;
+    }
+}
+
+// One colored token, as classified by `highlight::TokenClass` (`class` is
+// its `as_str()`: "plain" | "keyword" | "string" | "comment" | "number" |
+// "function" - see `Syntax` above for what each one renders as). Never
+// crosses a line break - see `Span` in `highlight.rs`.
+export struct CodeSpanData {
+    text: string,
+    class: string,
+}
+
+// One highlighted source line: the spans a `HorizontalLayout` lays out left
+// to right to reproduce it. Only exists so `MessageBlockData.lines` can be a
+// `[CodeLineData]` rather than a single flat `[CodeSpanData]` with no line
+// boundaries - `.slint` has no inline-flow layout to re-wrap a flat span
+// list back into rows itself, so the Rust side (`highlight::highlight_code`)
+// groups them by source line up front.
+export struct CodeLineData {
+    spans: [CodeSpanData],
+}
+
+// One top-level block of an assistant reply - a paragraph, a list, a code
+// block, a heading, a table, a rule. Built on the Rust side by
+// `markdown::split_blocks`; see that module for why a reply is split at all
+// (short version: `StyledText::from_markdown` fails on the *whole* message as
+// soon as one construct it doesn't support appears, and `StyledText` has no
+// text selection, while the blocks rendered through `CopiableText` do).
+export struct MessageBlockData {
+    // "styled" | "code" | "heading" | "text" | "rule" - mirrors
+    // `markdown::BlockKind`, keep the two in sync. `MessageBlock` renders
+    // anything it doesn't recognise as plain text.
+    kind: string,
+    // What every non-"styled" kind displays: the code for "code", the
+    // heading text for "heading", the markdown source as-is for "text".
+    content: string,
+    // The parsed rendering, only set (and only read) when kind == "styled".
+    // There is no way to invoke that parser from `.slint` itself - a plain
+    // `string` bound to a `styled-text` property is wrapped as-is, not
+    // parsed, and the `@markdown()` macro only parses its own literal source
+    // text, not a runtime value.
+    //
+    // The fixtures under `ui/fixtures/*.json` therefore never use kind
+    // "styled": `slint-viewer --load-data` has no JSON case for a
+    // `styled-text` field, so it stays `Value::Void` and instantiating a
+    // `StyledText` on it panics the viewer outright ("binding was of the
+    // wrong type: ()"). Fixture blocks use the other kinds, which render
+    // through `CopiableText` and load fine.
+    content-styled: styled-text,
+    // A fenced code block's info string ("rust", "bash", ...), else "".
+    language: string,
+    // 1-6 for kind == "heading", 0 otherwise.
+    heading-level: int,
+    // One top-level item of a bullet/numbered list, split out of its list on
+    // the Rust side (`markdown::split_blocks`) so consecutive items can be
+    // spaced apart - a whole list is a single `StyledText`, which stacks its
+    // item paragraphs with zero leading and offers no line-height knob. The
+    // item keeps its own marker and renders like any other block (`styled`,
+    // or `text` if it holds something `StyledText` rejects); this flag only
+    // drives the gap the row puts *above* it (see `gap-top` below).
+    list-item: bool,
+    // Populated only for kind == "code": `content`, pre-tokenized into one
+    // row of colored spans per source line by `highlight::highlight_code`.
+    // A separate field rather than reusing `content-styled`'s mechanism
+    // because there is no mechanism to reuse - `StyledText` has no way to
+    // color an arbitrary run (see `highlight.rs`'s module doc for why
+    // `<span style="color:...">` doesn't work here despite being documented
+    // upstream). Empty for every other kind; fixtures must still spell out
+    // `"lines": []` for a "code" block (same reason as `blocks: []` above -
+    // the interpreter defaults a missing field to `Value::Void`, which
+    // crashes rather than falling back to empty).
+    lines: [CodeLineData],
+}
+
+export struct ChatMessageData {
+    role: string,
+    // The raw markdown source, as received from the model. Shown as-is by
+    // the per-message "Texte brut" toggle, and copied by "Copier le
+    // markdown".
+    content: string,
+    // `content` with every markdown marker stripped - what "Copier" puts on
+    // the clipboard, so copying gives back what is on screen rather than its
+    // source.
+    content-plain: string,
+    // The blocks to render, in order. Empty for user and system messages
+    // (never markdown: a file path can legitimately contain a stray "_" or
+    // "*"), and empty in the fixtures unless a block list is spelled out
+    // there. `ChatMessageRow` renders an empty list as a single plain
+    // `CopiableText` of `content` - the rendering everything used before
+    // block splitting existed.
+    //
+    // Fixtures must set this explicitly (`"blocks": []` at minimum): the
+    // interpreter's `&&` doesn't short-circuit and a missing field is
+    // `Value::Void`, which crashes `slint-viewer` rather than defaulting.
+    blocks: [MessageBlockData],
+    // This message's reasoning trace ("" if the model didn't produce one).
+    thinking: string,
+    // First line of `thinking`, whitespace-collapsed and cut to a few words
+    // (Rust-side, `chat_row`), with a trailing "…" when anything was dropped.
+    // Shown in the collapsed reasoning row so it previews what the model was
+    // reasoning about without expanding. "" whenever `thinking` is "".
+    thinking-preview: string,
+    // Still arriving from the model - drives the "Thinking…" vs "Thoughts"
+    // label and whether the trace auto-expands.
+    streaming: bool,
+    // Non-empty on the assistant message that just proposed a plan in this
+    // run - drives the "Plan proposed" chip.
+    plan-id: string,
+    plan-step-count: int,
+}
+
+export struct PlanStepData {
+    step: int,
+    total: int,
+    description: string,
+    operation: string,
+    status: string,
+    // RUN_COMMAND only. `command` is the argv joined for display, `cwd` its
+    // working directory, `shell` whether it runs under `/bin/sh -c`, and
+    // `irreversible` is always true for a command (shown as a "non annulable"
+    // marker - a command has no inverse).
+    command: string,
+    // `command`, pre-tokenized the same way as a code block's lines (see
+    // `CodeLineData`) - here always a single logical line, so a flat
+    // `[CodeSpanData]` rather than `[CodeLineData]`.
+    command-line: [CodeSpanData],
+    shell: bool,
+    cwd: string,
+    irreversible: bool,
+    // Filled once the command has run: `command-ran` gates the folded output
+    // section, `exit-code` is its status (-1 if it was signalled), and
+    // `output-truncated` flags a stream that hit the 64 KiB cap.
+    command-ran: bool,
+    exit-code: int,
+    stdout: string,
+    stderr: string,
+    output-truncated: bool,
+}
+
+// One remembered command in the settings panel's revoke list. `key` is the
+// opaque token round-tripped back through `forget-allowlist-entry`.
+export struct AllowlistEntryData {
+    key: string,
+    display: string,
+}
+
+export struct SessionRowData {
+    id: string,
+    title: string,
+    subtitle: string,
+    // Non-empty when this row starts a new date group ("Aujourd'hui",
+    // "Hier", ...) - render a header above the row in that case.
+    group-label: string,
+}
+
+// One block of an assistant reply (see `MessageBlockData`). Everything
+// except the "styled" kind renders through `CopiableText`, so those blocks -
+// code above all, which is what people actually select and copy out of a
+// reply - keep click-drag selection that `StyledText` doesn't offer.
+component MessageBlock inherits VerticalLayout {
+    in property <MessageBlockData> block;
+    // Space above this block, set per-block by the row (see the `for` loop in
+    // `ChatMessageRow`): the reply's blocks sit in a `spacing: 0` layout and
+    // every gap is this padding instead, so a section heading, a plain
+    // paragraph and a run of list items can each carry a different rhythm.
+    // `StyledText` exposes no line-height, so between-block space is the only
+    // lever for making a reply breathe.
+    in property <length> gap-top;
+    // Fired by a code block's own "Copier" action; bubbles up to the row,
+    // then to `MainWindow`, which owns clipboard access.
+    callback copy-clicked(string);
+
+    padding-top: root.gap-top;
+
+    if block.kind == "styled": StyledText {
+        text: block.content-styled;
+        default-color: Palette.text;
+        // The bundled body face - the whole reason it is bundled is that
+        // `StyledText` has no line-height knob and Open Sans' taller metrics
+        // are the only way to loosen prose leading here (see the font imports
+        // at the top of this file).
+        default-font-family: Theme.body-font;
+        default-font-size: Theme.font-lg;
+        link-color: Palette.accent;
+    }
+
+    // Headings: `StyledText` doesn't support them at all, so they're drawn
+    // here. Only the weight and a single size step separate the levels - a
+    // reply's "# Titre" is a section marker inside a chat row, not a page
+    // title, and a real h1-to-h6 ramp would tower over the message it
+    // belongs to. The extra space that sets a heading apart from the
+    // section above it is `gap-top`, applied on the root.
+    if block.kind == "heading": CopiableText {
+        text: block.content;
+        font-size: block.heading-level <= 2 ? Theme.font-lg + 2px : Theme.font-lg;
+        font-weight: 700;
+    }
+
+    if block.kind == "code": Rectangle {
+        background: Palette.bubble-bg;
+        border-radius: Theme.radius;
+
+        VerticalLayout {
+            padding: Theme.space-2;
+            spacing: Theme.space-1;
+
+            // No `alignment` here on purpose: the spacer below only pushes
+            // the copy action to the right edge if the layout actually
+            // distributes its leftover space, which `alignment: start`
+            // would suppress.
+            //
+            // The negative right padding cancels `TextButton`'s own
+            // horizontal padding, so the action *text* lines up with the
+            // code's right margin (measured: 17px inside the card's right
+            // edge without it, against 9px for the code on the left) while
+            // its hover box still extends past it - same trick as the
+            // per-message actions below.
+            HorizontalLayout {
+                spacing: Theme.space-2;
+                padding-right: -Theme.space-2;
+
+                VerticalLayout {
+                    alignment: center;
+
+                    Label {
+                        text: block.language;
+                        font-size: Theme.font-xs;
+                        font-weight: 700;
+                        letter-spacing: Theme.tracking;
+                        color: Palette.text-faint;
+                    }
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+
+                // On the code card's own fill, so hover/press step one
+                // deeper than the defaults - see `TextButton`. Icon-only:
+                // "Copier" next to a code block reads as an icon everywhere
+                // (VS Code, GitHub, ...), so the label adds width without
+                // adding clarity here.
+                IconButton {
+                    icon: "copy";
+                    label: "Copier";
+                    icon-size: 12px;
+                    hover-bg: Palette.surface-press;
+                    press-bg: Palette.border;
+                    clicked => { root.copy-clicked(block.content); }
+                }
+            }
+
+            // Highlighted source, one row of `CodeSpan`s per line (see
+            // `highlight.rs`, `CodeSpanData`/`CodeLineData`). Lines don't
+            // wrap - code that wraps mid-token reads worse than code that
+            // scrolls, and every real code viewer (VS Code, GitHub, ...)
+            // scrolls horizontally rather than wrapping - so this is a
+            // `ScrollView` rather than the `CopiableText` word-wrap this
+            // used before highlighting existed. `min-width`/`min-height: 0`
+            // and an explicit `height` override `ScrollView`'s own
+            // std-widgets sizing (`min-height/width: 50px`,
+            // `vertical-stretch: 1`, both wrong for a card that should hug
+            // short code and never force a 50px-tall block on a one-liner -
+            // see the slint-lito skill's gotcha on std-widgets' hardcoded
+            // internal sizing fighting a dense layout).
+            code-scroll := ScrollView {
+                min-width: 0px;
+                vertical-stretch: 0;
+                height: code-lines.preferred-height;
+                vertical-scrollbar-policy: always-off;
+                horizontal-scrollbar-policy: as-needed;
+
+                code-lines := VerticalLayout {
+                    alignment: start;
+                    spacing: 0px;
+
+                    for line[li] in block.lines: HorizontalLayout {
+                        alignment: start;
+                        spacing: 0px;
+
+                        for span[si] in line.spans: CodeSpan {
+                            text: span.text;
+                            cls: span.class;
+                            plain-color: Palette.text;
+                            font-size: Theme.font-md;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Anything `StyledText` rejected (a table, a block quote, a paragraph
+    // holding an image or raw HTML): the markdown source, selectable.
+    if block.kind == "text": CopiableText {
+        text: block.content;
+    }
+
+    if block.kind == "rule": VerticalLayout {
+        padding-top: Theme.space-1;
+        padding-bottom: Theme.space-1;
+
+        HDivider { }
+    }
+}
+
+// One row in the chat list. User messages get a flat gray bubble,
+// right-aligned; everything else (assistant, system) renders as plain text
+// with no bubble/border, left-aligned - matching a plain-transcript reading
+// experience rather than a two-way chat-bubble one.
+component ChatMessageRow inherits VerticalLayout {
+    in property <ChatMessageData> msg;
+    private property <bool> is-user: msg.role == "user";
+    private property <bool> thinking-expanded: false;
+    private property <bool> live-thinking: msg.streaming && msg.content == "";
+    // The activity indicator below shows the spinning `Spinner` (work with no
+    // token flow) rather than the blinking caret (a paused stream) for a
+    // `streaming` system message or an assistant reply with nothing written yet.
+    private property <bool> activity-waiting: msg.role == "system" || msg.content == "";
+    // User toggle for this one row: block splitting gives back selection on
+    // code, tables and anything else that isn't styled, but a styled
+    // paragraph still can't be selected (see `MessageBlockData`), so this
+    // drops the whole message back to one selectable `CopiableText` of the
+    // markdown source. Local UI state, not persisted - like
+    // `thinking-expanded` above, it resets if `root.messages` is rebuilt
+    // wholesale (e.g. a new message arrives) while this row is toggled.
+    private property <bool> show-raw: false;
+    // Fired when the "Plan proposed" chip is clicked - the parent
+    // (`MainWindow`) owns the actual plan-panel visibility.
+    callback plan-chip-clicked();
+    // Fired by the "Copier" action below - the parent owns clipboard access
+    // (Rust-side, via `copypasta`).
+    callback copy-clicked(string);
+
+    padding-left: Theme.space-5;
+    padding-right: Theme.space-5;
+    // `space-3`, not `space-2`: this is the gap between two *different*
+    // turns (24px combined with the next row's own top padding), meant to
+    // read as looser than the `space-2` spacing this same row uses below
+    // for its *own* parts (bubble/thinking/body/actions) *and* than the
+    // widened between-block ramp inside a single reply (top step `space-4`,
+    // 16px - see the `for` loop below). Before the first pass both gaps were
+    // `space-1`/`space-2` and combined to the same 8px on screen, so nothing
+    // separated "a new message" from "more of the same message"; the second
+    // pass (design.md, 2026-09-09) widened the in-reply block ramp, so this
+    // stepped up too to keep the turn boundary the loosest gap on screen.
+    padding-top: Theme.space-3;
+    padding-bottom: Theme.space-3;
+    spacing: Theme.space-2;
+
+    if is-user: HorizontalLayout {
+        alignment: end;
+
+        Rectangle {
+            max-width: 440px;
+            preferred-width: content-user.preferred-width + 2 * Theme.space-3;
+            background: Palette.bubble-bg;
+            border-radius: Theme.radius;
+            // Derived from the child's *actual* height (which carries
+            // `CopiableText`'s own accent headroom), not from its
+            // `preferred-height` - otherwise the padding below the text is
+            // short by that headroom.
+            height: content-user.height + 2 * Theme.space-2;
+
+            content-user := CopiableText {
+                x: Theme.space-3;
+                y: Theme.space-2;
+                width: parent.width - 2 * Theme.space-3;
+                text: msg.content;
+            }
+        }
+    }
+
+    // No card, no fill in any state. Collapsed, the row reads: brain glyph +
+    // a few-word preview of the trace's first line (elided) + an "Afficher"
+    // text button. There is deliberately no far-right chevron - the button is
+    // the whole disclosure affordance, and the preview gives a one-glance
+    // sense of what the model was reasoning about without opening anything.
+    // Expanded, it's the brain glyph + a "Voir moins" button, with the full
+    // trace flowing underneath in small faint text the same way the reply's
+    // own blocks render below it. An earlier version framed the expanded/live
+    // trace in a filled `sidebar-hover` card, but the fill materialising out
+    // of nothing on expand read as a jarring accordion jump. During live
+    // generation the preview is replaced by "Réflexion…" and the button is
+    // hidden: that state is transient, must read as "in progress", and the
+    // trace shouldn't be closable mid-run. `brain` stands in for the word
+    // "Raisonnement" (silent, recognizable, matches this app's
+    // plain-professional icon language rather than an AI-cliché glyph like a
+    // sparkle).
+    if msg.thinking != "": Rectangle {
+        VerticalLayout {
+            spacing: Theme.space-1;
+
+            HorizontalLayout {
+                spacing: Theme.space-1;
+                alignment: start;
+
+                // The brain glyph doubles as a toggle, mirroring the text
+                // button - a click on it opens (or closes) the trace. Wrapped
+                // for vertical centering: it's fixed-size with no centering of
+                // its own, and a fixed-size child of a `HorizontalLayout` is
+                // top-aligned (Slint cross-axis rule). Inert while live.
+                VerticalLayout {
+                    alignment: center;
+
+                    TouchArea {
+                        width: 13px;
+                        height: 13px;
+                        enabled: !live-thinking;
+                        mouse-cursor: pointer;
+                        clicked => { thinking-expanded = !thinking-expanded; }
+
+                        Icon {
+                            name: "brain";
+                            width: 13px;
+                            height: 13px;
+                            colorize: Palette.text-faint;
+                        }
+                    }
+                }
+
+                // Live: the transient status word. Collapsed: the first-line
+                // preview, hard-capped to a few words in Rust and elided here
+                // as a backstop for a narrow window. Expanded: nothing here -
+                // the "Voir moins" button carries the row on its own.
+                if live-thinking: Label {
+                    text: "Réflexion…";
+                    font-italic: true;
+                    font-size: Theme.font-sm;
+                    color: Palette.text-faint;
+                }
+
+                if !live-thinking && !thinking-expanded: Label {
+                    text: msg.thinking-preview;
+                    font-size: Theme.font-sm;
+                    color: Palette.text-faint;
+                    wrap: no-wrap;
+                    overflow: elide;
+                    horizontal-stretch: 0;
+                    max-width: 360px;
+                }
+
+                // Disclosure toggle. Wrapped for vertical centering, same
+                // reason as the brain glyph above. Hidden while live.
+                if !live-thinking: VerticalLayout {
+                    alignment: center;
+
+                    TextButton {
+                        text: thinking-expanded ? "Voir moins" : "Afficher";
+                        clicked => { thinking-expanded = !thinking-expanded; }
+                    }
+                }
+
+                Rectangle { horizontal-stretch: 1; }
+            }
+
+            if live-thinking || thinking-expanded: HorizontalLayout {
+                alignment: start;
+
+                CopiableText {
+                    max-width: Theme.read-measure;
+                    text: msg.thinking;
+                    font-size: Theme.font-sm;
+                    color: Palette.text-faint;
+                }
+            }
+        }
+    }
+
+    // Assistant replies are markdown from the model, split into blocks on
+    // the Rust side (`markdown::split_blocks`) and rendered one by one -
+    // paragraphs and lists through `StyledText`, everything else through
+    // `CopiableText`. System messages are always plain app-generated strings
+    // (e.g. a file path), never markdown, so they carry no blocks and take
+    // the fallback below, as does any message the user has switched to raw.
+    if !is-user && msg.blocks.length > 0 && !show-raw: HorizontalLayout {
+        // Bound the reply to a readable measure (`Theme.read-measure`), left-
+        // aligned. A bare `max-width` on a `VerticalLayout` child of a
+        // `VerticalLayout` is ignored; wrapping it in `HorizontalLayout {
+        // alignment: start }` is what makes the cap take - verified.
+        alignment: start;
+
+      VerticalLayout {
+        max-width: Theme.read-measure;
+        // `spacing: 0` and every gap driven per-block by `MessageBlock.gap-top`
+        // instead: `StyledText` (what renders prose + lists here) has no
+        // line-height knob of any kind - not on 1.17.1, and not on the 1.18
+        // beta either (`line-height-factor` landed for `Text`/`TextInput` only;
+        // `StyledText` was cut from PR #12649 - see design.md, 2026-09-09 bis,
+        // for why we stay on 1.17.1). So between-block space is the *only*
+        // lever for a reply that breathes -
+        // and a single uniform value can't both group a bullet list and set a
+        // section heading apart from it. The ramp was widened once more after a
+        // second "still too compact" pass (see design.md, 2026-09-09): every
+        // step up by one `space-*`, since inside a wrapped paragraph there is no
+        // leading to give at all, so the between-block gap has to carry the
+        // whole sense of air. So:
+        //   - heading: `space-6` (24px) - a new section, pulled clear of the
+        //     one above;
+        //   - a list item right after another list item: `space-3` (12px) - the
+        //     run reads as one list, just not a wall of text (a whole list is
+        //     one `StyledText` that stacks its items with *zero* leading, which
+        //     is the density this pass is about);
+        //   - everything else, including the first item of a list: `space-4`
+        //     (16px);
+        //   - first block of the reply: nothing.
+        spacing: 0px;
+
+        for block[i] in msg.blocks: MessageBlock {
+            block: block;
+            gap-top: i == 0 ? 0px
+                : block.kind == "heading" ? Theme.space-6
+                : (block.list-item && msg.blocks[i - 1].list-item) ? Theme.space-3
+                : Theme.space-4;
+            copy-clicked(text) => { root.copy-clicked(text); }
+        }
+      }
+    }
+
+    if !is-user && (msg.blocks.length == 0 || show-raw): HorizontalLayout {
+        alignment: start;
+
+        CopiableText {
+            max-width: Theme.read-measure;
+            text: msg.content;
+            font-italic: msg.role == "system";
+            color: msg.role == "system" ? Palette.text-faint : Palette.text;
+            font-size: msg.role == "system" ? Theme.font-md : Theme.font-lg;
+        }
+    }
+
+    // Activity indicator, shown for as long as this message is still being
+    // worked on. It sits on its own row under the text rather than inline
+    // after the last glyph: Slint has no inline-flow layout, so there's no way
+    // to place an element after wrapped text without re-implementing the
+    // wrapping. Three cases, none of which should read as "frozen":
+    //  - a system message that is `streaming` is a reconnaissance command /
+    //    filesystem query the model is *blocked on* - no tokens are flowing,
+    //    so it gets the spinning `Spinner` and an "Exécution en cours…" label;
+    //  - an assistant message with no content yet is the model thinking before
+    //    its first answer token - also no flow, also the `Spinner`;
+    //  - an assistant message that already has content is a stream that has
+    //    merely *paused* - the blinking `StreamingCaret` fits that, and a lone
+    //    label under real text would be noise.
+    if !is-user && msg.streaming: HorizontalLayout {
+        alignment: start;
+        spacing: Theme.space-2;
+
+        VerticalLayout {
+            alignment: center;
+
+            if activity-waiting: Spinner { }
+            if !activity-waiting: StreamingCaret { }
+        }
+
+        if activity-waiting: Label {
+            text: msg.role == "system" ? "Exécution en cours…" : "Génération…";
+            font-italic: true;
+            font-size: Theme.font-sm;
+            color: Palette.text-faint;
+            vertical-alignment: center;
+        }
+    }
+
+    // Per-message actions, icon-only (see `IconButton`). "Copier" copies what
+    // is on screen (markdown markers stripped, `content-plain`) rather than
+    // the source, which is what someone pasting a reply into a note or a
+    // message expects; the source is one click away via the "</>" action.
+    // Both work regardless of which rendering is currently shown. The
+    // raw/rendered toggle only appears when there are blocks to switch away
+    // from/back to, and its icon names its *target* state, not the current
+    // one - "</>" (switch to raw) while rendered, a paragraph mark (switch to
+    // rendered) while raw.
+    if !is-user && msg.content != "": HorizontalLayout {
+        alignment: start;
+        spacing: 0px;
+        // Negative left padding, cancelling `IconButton`'s own horizontal
+        // padding, so the action *icon* stays flush with the message body
+        // above it while the clickable/hoverable box still extends past it on
+        // both sides. Verified: a child of a layout with `padding-left: -8px`
+        // lands 8px left of the layout's content origin.
+        padding-left: -Theme.space-2;
+
+        IconButton {
+            icon: "copy";
+            label: "Copier";
+            clicked => {
+                root.copy-clicked(msg.blocks.length > 0 ? msg.content-plain : msg.content);
+            }
+        }
+
+        if msg.blocks.length > 0: IconButton {
+            icon: show-raw ? "align-left" : "code";
+            label: show-raw ? "Afficher le rendu" : "Afficher le texte brut";
+            clicked => { show-raw = !show-raw; }
+        }
+    }
+
+    if msg.plan-id != "": HorizontalLayout {
+        alignment: start;
+
+        Rectangle {
+            border-width: 1px;
+            border-radius: Theme.radius;
+            background: chip-touch.pressed ? Palette.surface-press
+                : chip-touch.has-hover ? Palette.surface-hover
+                : Palette.surface;
+            border-color: chip-touch.has-hover ? Palette.border-hover : Palette.border;
+
+            animate background, border-color { duration: Theme.anim-fast; easing: ease-out; }
+
+            chip-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.plan-chip-clicked(); }
+            }
+
+            HorizontalLayout {
+                padding-left: Theme.space-2;
+                padding-right: Theme.space-3;
+                padding-top: Theme.space-1;
+                padding-bottom: Theme.space-1;
+                spacing: Theme.space-2;
+
+                VerticalLayout {
+                    alignment: center;
+
+                    Image {
+                        source: @image-url("icons/plan.svg");
+                        width: 13px;
+                        height: 13px;
+                        image-fit: contain;
+                        colorize: Palette.text-muted;
+                    }
+                }
+
+                Label {
+                    text: "Plan proposé · " + msg.plan-step-count + " étapes";
+                    font-size: Theme.font-sm;
+                    font-weight: 600;
+                }
+            }
+        }
+    }
+}
+
+// The card shown above the composer while a terminal command waits on the
+// user's decision - for a `RUN_COMMAND` plan step or a reconnaissance command
+// mid-planning. Placed in the chat column (the one spot visible in both
+// cases). No `Palette.accent` anywhere: accent is the composer send button's
+// alone (design.md), so the semantic weight is in the icons and the danger
+// tone of the "non annulable" line.
+component ApprovalCard inherits Rectangle {
+    in property <[string]> argv;
+    // One `highlight::TokenClass::as_str()` per `argv` element, same index -
+    // a top-level sibling array rather than pairing each `argv` element with
+    // its class in one struct, since `argv`/`argv-class` are already plain
+    // `[string]` properties directly on `MainWindow` (see `approval-argv`),
+    // not nested inside another struct's array field.
+    in property <[string]> argv-class;
+    in property <bool> shell;
+    in property <string> cwd;
+    in property <string> program;
+    in property <string> origin;
+    in property <bool> rememberable;
+    // "deny" | "allow" | "remember"
+    callback answer(string);
+
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: Palette.border;
+    border-radius: Theme.radius;
+    vertical-stretch: 0;
+
+    VerticalLayout {
+        padding: Theme.space-3;
+        spacing: Theme.space-2;
+
+        HorizontalLayout {
+            spacing: Theme.space-2;
+
+            VerticalLayout {
+                alignment: center;
+
+                Label {
+                    text: "APPROBATION REQUISE · " + root.origin;
+                    font-size: Theme.font-xs;
+                    font-weight: 700;
+                    letter-spacing: Theme.tracking;
+                    color: Palette.text-faint;
+                }
+            }
+
+            Rectangle { horizontal-stretch: 1; }
+
+            if root.shell: Rectangle {
+                background: Palette.warn-soft;
+                border-radius: Theme.radius;
+                horizontal-stretch: 0;
+                vertical-stretch: 0;
+                width: shell-label.preferred-width + 2 * Theme.space-2;
+                height: shell-label.height + Theme.space-1;
+
+                shell-label := Label {
+                    text: "shell";
+                    color: Palette.warn;
+                    font-size: Theme.font-xs;
+                    font-weight: 700;
+                    letter-spacing: Theme.tracking;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+
+        // Always the resolved program - `Syntax.color("function", ...)`
+        // directly rather than a computed `class` property, since this row's
+        // role never varies.
+        CopiableText {
+            text: root.program;
+            font-family: "Menlo, monospace";
+            font-size: Theme.font-sm;
+            color: Palette.syntax-function;
+            font-weight: 700;
+        }
+
+        Rectangle {
+            background: Palette.bubble-bg;
+            border-radius: Theme.radius;
+
+            VerticalLayout {
+                padding: Theme.space-2;
+                spacing: 0px;
+
+                // One argv element per row, colored by its own role
+                // (`argv-class[i]`, from `highlight::classify_shell_word`).
+                // Never split into per-word spans within a row: an argv
+                // element is one OS-level argument (may legitimately contain
+                // spaces), and re-tokenizing it would misrepresent what
+                // actually runs - see `highlight.rs`.
+                for arg[i] in root.argv: CopiableText {
+                    text: arg;
+                    font-family: "Menlo, monospace";
+                    font-size: Theme.font-sm;
+                    color: Syntax.color(root.argv-class[i], Palette.text);
+                    font-weight: Syntax.weight(root.argv-class[i]);
+                }
+            }
+        }
+
+        Label {
+            text: "cwd : " + root.cwd;
+            font-size: Theme.font-xs;
+            color: Palette.text-muted;
+            wrap: word-wrap;
+        }
+
+        Label {
+            text: "Cette commande ne peut pas être annulée.";
+            font-size: Theme.font-xs;
+            font-italic: true;
+            color: Palette.danger;
+        }
+
+        HorizontalLayout {
+            alignment: start;
+            spacing: 0px;
+            padding-left: -Theme.space-3;
+
+            ActionButton {
+                label: "Refuser";
+                icon: "x";
+                tone: ActionTone.danger;
+                clicked => { root.answer("deny"); }
+            }
+
+            ActionButton {
+                label: "Autoriser";
+                icon: "play";
+                tone: ActionTone.neutral;
+                clicked => { root.answer("allow"); }
+            }
+
+            if root.rememberable: ActionButton {
+                label: "Autoriser et mémoriser";
+                icon: "check";
+                tone: ActionTone.success;
+                clicked => { root.answer("remember"); }
+            }
+        }
+    }
+}
+
+// One selectable approval-mode row in the settings panel: a radio dot, a
+// title, and a one-line description. Neutral highlight when selected - no
+// accent, same rule as everywhere else.
+component ModeOption inherits Rectangle {
+    in property <string> label;
+    in property <string> description;
+    in property <bool> selected;
+    callback chosen();
+
+    border-radius: Theme.radius;
+    background: root.selected ? Palette.surface-press
+        : touch.has-hover ? Palette.surface-hover
+        : #00000000;
+
+    animate background { duration: Theme.anim-fast; easing: ease-out; }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.chosen(); }
+    }
+
+    HorizontalLayout {
+        padding: Theme.space-2;
+        spacing: Theme.space-2;
+
+        VerticalLayout {
+            alignment: center;
+
+            Rectangle {
+                width: 12px;
+                height: 12px;
+                border-radius: 6px;
+                border-width: 1px;
+                border-color: root.selected ? Palette.text-muted : Palette.border;
+
+                Rectangle {
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 3px;
+                    background: root.selected ? Palette.text-muted : #00000000;
+                }
+            }
+        }
+
+        VerticalLayout {
+            spacing: 1px;
+
+            Label {
+                text: root.label;
+                font-size: Theme.font-sm;
+                font-weight: 600;
+            }
+
+            Label {
+                text: root.description;
+                font-size: Theme.font-xs;
+                color: Palette.text-faint;
+                wrap: word-wrap;
+            }
+        }
+    }
+}
+
+// One row in the session sidebar - an optional date-group header above a
+// clickable title/subtitle block. Highlighted with a neutral border/fill
+// when active, never the accent color (accent stays CTA-only, see
+// documentation/lito/design.md).
+component SessionRow inherits VerticalLayout {
+    in property <SessionRowData> item;
+    in property <bool> active;
+    callback selected();
+
+    if item.group-label != "": Rectangle {
+        height: 28px;
+
+        VerticalLayout {
+            alignment: end;
+            padding-left: Theme.space-3;
+            padding-bottom: Theme.space-1;
+
+            Label {
+                text: item.group-label;
+                font-size: Theme.font-xs;
+                font-weight: 700;
+                letter-spacing: Theme.tracking;
+                color: Palette.text-faint;
+            }
+        }
+    }
+
+    Rectangle {
+        // The single most conspicuous gap before this pass: a list of
+        // sessions where pointing at a row produced no feedback at all. The
+        // active row keeps its own (stronger) fill and is not overridden by
+        // hover, so "which one am I in" stays readable while pointing.
+        background: active ? Palette.surface-press
+            : touch.pressed ? Palette.surface-press
+            : touch.has-hover ? Palette.surface-hover
+            : #00000000;
+
+        animate background { duration: Theme.anim-fast; easing: ease-out; }
+
+        touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.selected(); }
+        }
+
+        VerticalLayout {
+            padding-left: Theme.space-3;
+            padding-right: Theme.space-3;
+            padding-top: Theme.space-2;
+            padding-bottom: Theme.space-2;
+
+            Label {
+                text: item.title;
+                font-size: Theme.font-md;
+                font-weight: 600;
+                overflow: elide;
+            }
+
+            if item.subtitle != "": Label {
+                text: item.subtitle;
+                font-size: Theme.font-xs;
+                color: Palette.text-faint;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "Lito";
+    // `preferred-*` (not `width`/`height`) so the window opens at this size
+    // but stays resizable by the user - binding `width`/`height` directly
+    // pins the window to a fixed size instead.
+    preferred-width: 1080px;
+    preferred-height: 640px;
+    min-width: 640px;
+    min-height: 420px;
+    background: Palette.bg;
+
+    in property <bool> is-processing: false;
+    in property <bool> ollama-connected: false;
+    in property <string> ollama-model: "";
+    in property <[string]> available-models: [];
+    // Index of `ollama-model` within `available-models` - Rust computes this
+    // from ollama-model's position in available-models (used to cycle to the
+    // *next* model on click) rather than Slint doing it (no imperative loops
+    // here).
+    in property <int> current-model-index: 0;
+    in property <string> current-plan-id: "";
+    // "pending" (proposed, not executed), "done" (executed), "rejected", or
+    // "" if there's no plan loaded.
+    in property <string> current-plan-status: "";
+    // The fs undo-log session id for the most recently executed plan -
+    // unrelated to a conversation session, see `ViewModelHandle`'s doc on
+    // `UiState::current_undo_id`.
+    in property <string> current-undo-id: "";
+    in property <bool> show-plan: false;
+    in property <[ChatMessageData]> messages: [];
+    in property <[PlanStepData]> plan-steps: [];
+    // The conversation currently loaded into the chat view.
+    in property <string> active-session-id: "";
+    in property <[SessionRowData]> sessions: [];
+    // The Ollama endpoint currently confirmed in use (see
+    // `ViewModelHandle::set_endpoint` - not updated optimistically, only
+    // once a fresh `Pong` confirms the new client actually works).
+    in property <string> ollama-endpoint: "";
+    // `lito_llm::DEFAULT_BASE_URL`, pushed once at startup so the settings
+    // panel's "Réinitialiser" action has something to restore to without
+    // this file hardcoding its own copy of that URL.
+    in property <string> default-ollama-endpoint: "";
+
+    // ---- command execution (RUN_COMMAND) ----
+    // Approval mode: "validation" (ask every time), "auto-restricted"
+    // (remembered commands run automatically), "auto-unsafe" (everything but
+    // the hard denylist runs automatically). Confirmed by the core.
+    in property <string> approval-mode: "validation";
+    // The remembered-command allowlist, for the settings panel's revoke UI.
+    in property <[AllowlistEntryData]> command-allowlist: [];
+    // A command waiting on the user's decision, shown as a card above the
+    // composer. `has-approval` gates the whole card.
+    in property <bool> has-approval: false;
+    in property <string> approval-request-id: "";
+    in property <[string]> approval-argv: [];
+    // One `highlight::TokenClass::as_str()` per `approval-argv` element -
+    // see `ApprovalCard.argv-class`.
+    in property <[string]> approval-argv-class: [];
+    in property <bool> approval-shell: false;
+    in property <string> approval-cwd: "";
+    // `argv[0]` resolved to an absolute path.
+    in property <string> approval-program: "";
+    // "Étape 2/3" or "Reconnaissance".
+    in property <string> approval-origin: "";
+    in property <bool> approval-rememberable: false;
+
+    // ---- Ollama connectivity diagnostic ----
+    // The modal is up whenever a probe is running or a result is in.
+    in property <bool> diagnosis-visible: false;
+    // A probe is in flight (no result yet).
+    in property <bool> diagnosing: false;
+    // The finished probe found the selected model working.
+    in property <bool> diagnosis-ok: false;
+    // The finished probe's remedy is `ollama signin` - show the sign-in block.
+    in property <bool> diagnosis-needs-signin: false;
+    in property <string> diagnosis-title: "";
+    in property <string> diagnosis-detail: "";
+
+    // Whether the chat should keep the newest content in view as it grows.
+    // Armed whenever the user does something that means "I want to see what
+    // happens next" (sending a message, opening a session), dropped as soon
+    // as they scroll away from the bottom, re-armed if they scroll back. Only
+    // `chat-scroll` reads it - see the handlers there.
+    private property <bool> stick-to-bottom: true;
+    // `Palette` above is this app's own light/dark toggle, entirely decoupled
+    // from the OS setting (see documentation/lito/design.md). std-widgets
+    // controls (`ScrollView`'s scrollbar, `ListView`'s) don't read our
+    // `Palette` at all - they follow std-widgets' own `Palette.color-scheme`,
+    // which defaults to the OS scheme. Left alone, a Mac in Light Mode always
+    // renders their scrollbar thumb/track light even while our own dark
+    // theme is active. Mirroring `Palette.dark` into a local property lets a
+    // `changed` handler push it into `StdPalette.color-scheme` reactively;
+    // `init` covers the first frame, which `changed` doesn't fire for.
+    private property <bool> effective-dark: Palette.dark;
+    init => { StdPalette.color-scheme = effective-dark ? ColorScheme.dark : ColorScheme.light; }
+    changed effective-dark => { StdPalette.color-scheme = effective-dark ? ColorScheme.dark : ColorScheme.light; }
+    // The settings popup's in-progress edit of the endpoint field - separate
+    // from `ollama-endpoint` so opening the popup always starts from the
+    // last *confirmed* value (see the settings button's `clicked` handler)
+    // and a closed-without-saving edit doesn't leak into it.
+    private property <string> endpoint-draft: "";
+
+    callback send-message(string, string);
+    callback execute-plan(string);
+    callback undo(string);
+    callback reject-plan(string);
+    callback open-plan();
+    callback close-plan();
+    callback new-session();
+    callback select-session(string);
+    callback search-sessions(string);
+    callback select-model(string);
+    callback toggle-theme(bool);
+    // Switch the Ollama endpoint - see the settings popup below.
+    callback set-endpoint(string);
+    callback ping();
+    // Stop the in-flight generation ("Arrêter", shown in place of the
+    // composer while `is-processing`).
+    callback cancel();
+    // Copy a chat message's raw text to the system clipboard - see
+    // `ChatMessageRow`'s "Copier" action.
+    callback copy-message(string);
+    // Answer the pending command approval card. Second arg is "deny", "allow",
+    // or "remember".
+    callback approve-command(string, string);
+    // Switch the command approval mode (settings panel).
+    callback set-approval-mode(string);
+    // Revoke one remembered command (settings panel, per-row "×").
+    callback forget-allowlist-entry(string);
+    // Run the Ollama connectivity diagnostic (settings panel), and close its
+    // result modal.
+    callback diagnose-ollama();
+    callback dismiss-diagnosis();
+
+    VerticalLayout {
+        // ---------- titlebar ----------
+        Rectangle {
+            // No `border-width` here (and none anywhere else in this file
+            // outside of self-contained controls): section separators are
+            // `Divider` elements, so a line is drawn exactly once and always
+            // on the same pixel as its neighbour's. The bottom rule below is
+            // the only line under this bar - the sidebar underneath used to
+            // add its own top border on the next row down, which rendered as
+            // a 2px-thick divider on the sidebar side only.
+            height: Theme.titlebar-h;
+            vertical-stretch: 0;
+            background: Palette.sidebar;
+
+            HorizontalLayout {
+                // "Lito" sits in a cell exactly as wide as the sessions
+                // sidebar below it, with its own divider at that same x -
+                // rather than the title floating at natural width with an
+                // unrelated stretch-spacer, so the titlebar/sidebar boundary
+                // is a real, continuous line top-to-bottom instead of a
+                // coincidental near-miss between unrelated elements.
+                Rectangle {
+                    width: Theme.sidebar-w;
+                    vertical-stretch: 0;
+
+                    HorizontalLayout {
+                        // `traffic-light-w`, not `space-3`: the native
+                        // close/minimize/zoom buttons float over this exact
+                        // corner (see `Theme.traffic-light-w`'s doc), and
+                        // without the extra inset "Lito" rendered underneath
+                        // them.
+                        padding-left: Theme.traffic-light-w;
+                        alignment: start;
+
+                        Label {
+                            text: "Lito";
+                            font-size: Theme.font-lg;
+                            font-weight: 700;
+                        }
+                    }
+                }
+
+                VDivider { }
+
+                Rectangle {
+                    horizontal-stretch: 1;
+
+                    HorizontalLayout {
+                        padding-left: Theme.space-3;
+                        padding-right: Theme.space-2;
+                        // The two trailing actions are `TextButton`s now and
+                        // carry their own horizontal padding, so the row's
+                        // own spacing drops a step to keep the same optical
+                        // gap between them.
+                        spacing: Theme.space-1;
+                        alignment: start;
+
+                        // Wrapper layout, not a bare `height` on the badge:
+                        // a fixed-height child of a `HorizontalLayout` is
+                        // top-aligned, and `max-height` is ignored outright
+                        // (both verified) - which is why the selector used to
+                        // stretch across the full titlebar and collide with
+                        // the rule below it.
+                        VerticalLayout {
+                            alignment: center;
+
+                            model-badge := Rectangle {
+                                // Merged Ollama status + model selector: one
+                                // bordered control, with a small custom dropdown
+                                // (`model-popup` below) rather than a
+                                // std-widgets `ComboBox` - the native ComboBox's
+                                // own `min-width: max(160px, ...)` blew this
+                                // control up far wider than the rest of this
+                                // dense titlebar, and its `model`/`current-index`
+                                // binding proved unreliable to drive from host
+                                // code on every state sync (see std-widgets'
+                                // `ComboBoxBase`, and Slint issue #11970). This
+                                // popup is fully within our own styling and
+                                // sidesteps that widget entirely.
+                                // Filled, not outlined - like `SearchField`.
+                                // This and `settings-badge` right after it
+                                // were the titlebar's only two hairline
+                                // borders on plain, mostly-empty pill shapes;
+                                // a filled rest state reads as a control on
+                                // its own, so both hairlines are gone.
+                                height: 24px;
+                                background: model-touch.pressed ? Palette.border
+                                    : model-touch.has-hover ? Palette.surface-press
+                                    : Palette.surface-hover;
+                                border-radius: Theme.radius;
+                                opacity: model-touch.enabled ? 1.0 : 0.6;
+
+                                animate background { duration: Theme.anim-fast; easing: ease-out; }
+
+                                model-touch := TouchArea {
+                                    enabled: root.ollama-connected && root.available-models.length > 1;
+                                    mouse-cursor: self.enabled ? MouseCursor.pointer : MouseCursor.default;
+                                    clicked => { model-popup.show(); }
+                                }
+
+                                HorizontalLayout {
+                                    padding-left: Theme.space-2;
+                                    padding-right: Theme.space-2;
+                                    spacing: Theme.space-1;
+
+                                    Rectangle {
+                                        // Wrapper fills the row's full height
+                                        // (like any other layout child); the dot
+                                        // inside is positioned explicitly so
+                                        // it's vertically centered against the
+                                        // label next to it rather than pinned to
+                                        // the layout's top edge.
+                                        width: 7px;
+
+                                        Rectangle {
+                                            width: 7px;
+                                            height: 7px;
+                                            y: (parent.height - self.height) / 2;
+                                            background: root.ollama-connected ? Palette.text-muted : Palette.warn;
+                                        }
+                                    }
+
+                                    Label {
+                                        text: !root.ollama-connected ? "hors ligne" : root.available-models.length == 0 ? "aucun modèle" : root.ollama-model;
+                                        font-size: Theme.font-sm;
+                                        color: Palette.text-muted;
+                                    }
+                                }
+
+                                model-popup := PopupWindow {
+                                    x: 0px;
+                                    y: parent.height + Theme.space-1;
+                                    width: max(180px, parent.width);
+                                    height: root.available-models.length * 26px + 2 * Theme.space-1;
+                                    close-policy: close-on-click-outside;
+
+                                    Rectangle {
+                                        background: Palette.surface;
+                                        border-width: 1px;
+                                        border-color: Palette.border;
+                                        border-radius: Theme.radius;
+
+                                        VerticalLayout {
+                                            padding: Theme.space-1;
+
+                                            for m in root.available-models: Rectangle {
+                                                height: 26px;
+                                                background: m == root.ollama-model ? Palette.surface-press
+                                                    : row-touch.pressed ? Palette.surface-press
+                                                    : row-touch.has-hover ? Palette.surface-hover
+                                                    : #00000000;
+
+                                                animate background { duration: Theme.anim-fast; easing: ease-out; }
+
+                                                row-touch := TouchArea {
+                                                    mouse-cursor: pointer;
+                                                    clicked => {
+                                                        root.select-model(m);
+                                                        model-popup.close();
+                                                    }
+                                                }
+
+                                                HorizontalLayout {
+                                                    width: 100%;
+                                                    padding-left: Theme.space-2;
+                                                    padding-right: Theme.space-2;
+
+                                                    Label {
+                                                        text: m;
+                                                        font-size: Theme.font-sm;
+                                                        overflow: elide;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Rectangle { horizontal-stretch: 1; }
+
+                        VerticalLayout {
+                            alignment: center;
+
+                            IconButton {
+                                icon: Palette.dark ? "sun" : "moon";
+                                label: Palette.dark ? "Passer au thème clair" : "Passer au thème sombre";
+                                icon-color: Palette.text-faint;
+                                clicked => { root.toggle-theme(!Palette.dark); }
+                            }
+                        }
+
+                        // Endpoint settings. Icon-only now (a gear needs no
+                        // caption) - filled rather than outlined, like
+                        // `model-badge` above, since it opens a popup and
+                        // still needs a "there's a control here" affordance
+                        // without a hairline border to provide it.
+                        VerticalLayout {
+                            alignment: center;
+
+                            settings-badge := Rectangle {
+                                width: self.height;
+                                height: 24px;
+                                background: settings-touch.pressed ? Palette.border
+                                    : settings-touch.has-hover ? Palette.surface-press
+                                    : Palette.surface-hover;
+                                border-radius: Theme.radius;
+
+                                accessible-role: button;
+                                accessible-label: "Réglages";
+
+                                animate background { duration: Theme.anim-fast; easing: ease-out; }
+
+                                settings-touch := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        // Always start the edit from the last
+                                        // *confirmed* endpoint, not from
+                                        // whatever was left in the field the
+                                        // last time the popup was closed
+                                        // without saving.
+                                        root.endpoint-draft = root.ollama-endpoint;
+                                        settings-popup.show();
+                                    }
+                                }
+
+                                Icon {
+                                    name: "settings";
+                                    width: 13px;
+                                    height: 13px;
+                                    colorize: Palette.text-muted;
+                                }
+
+                                settings-popup := PopupWindow {
+                                    x: 0px;
+                                    y: parent.height + Theme.space-1;
+                                    width: 320px;
+                                    height: settings-content.preferred-height;
+                                    close-policy: close-on-click-outside;
+
+                                    Rectangle {
+                                        background: Palette.surface;
+                                        border-width: 1px;
+                                        border-color: Palette.border;
+                                        border-radius: Theme.radius;
+
+                                        settings-content := VerticalLayout {
+                                            padding: Theme.space-3;
+                                            spacing: Theme.space-2;
+
+                                            Label {
+                                                text: "ENDPOINT OLLAMA";
+                                                font-size: Theme.font-xs;
+                                                font-weight: 700;
+                                                letter-spacing: Theme.tracking;
+                                                color: Palette.text-faint;
+                                            }
+
+                                            Rectangle {
+                                                background: Palette.surface;
+                                                border-width: 1px;
+                                                border-color: endpoint-input.has-focus ? Palette.focus-ring : Palette.border;
+                                                border-radius: Theme.radius;
+                                                height: 32px;
+
+                                                animate border-color { duration: Theme.anim-fast; easing: ease-out; }
+
+                                                endpoint-input := TextInput {
+                                                    x: Theme.space-2;
+                                                    y: 0px;
+                                                    width: parent.width - 2 * Theme.space-2;
+                                                    height: parent.height;
+                                                    single-line: true;
+                                                    vertical-alignment: center;
+                                                    font-size: Theme.font-md;
+                                                    color: Palette.text;
+                                                    text <=> root.endpoint-draft;
+                                                    accepted => {
+                                                        root.set-endpoint(root.endpoint-draft);
+                                                        settings-popup.close();
+                                                    }
+                                                }
+                                            }
+
+                                            Label {
+                                                text: "Adresse du serveur Ollama, si exposé ailleurs qu'en local (ex. " + root.default-ollama-endpoint + ").";
+                                                font-size: Theme.font-xs;
+                                                color: Palette.text-faint;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                spacing: Theme.space-1;
+                                                padding-left: -Theme.space-3;
+
+                                                TextButton {
+                                                    text: "Réinitialiser";
+                                                    clicked => {
+                                                        root.endpoint-draft = root.default-ollama-endpoint;
+                                                    }
+                                                }
+
+                                                Rectangle { horizontal-stretch: 1; }
+
+                                                ActionButton {
+                                                    label: "Enregistrer";
+                                                    icon: "check";
+                                                    tone: ActionTone.success;
+                                                    clicked => {
+                                                        root.set-endpoint(root.endpoint-draft);
+                                                        settings-popup.close();
+                                                    }
+                                                }
+                                            }
+
+                                            HDivider { }
+
+                                            Label {
+                                                text: "DIAGNOSTIC";
+                                                font-size: Theme.font-xs;
+                                                font-weight: 700;
+                                                letter-spacing: Theme.tracking;
+                                                color: Palette.text-faint;
+                                            }
+
+                                            Label {
+                                                text: "Teste si le modèle sélectionné répond réellement, modèles cloud compris (connexion à un compte Ollama requise).";
+                                                font-size: Theme.font-xs;
+                                                color: Palette.text-faint;
+                                                wrap: word-wrap;
+                                            }
+
+                                            HorizontalLayout {
+                                                padding-left: -Theme.space-3;
+
+                                                ActionButton {
+                                                    label: "Diagnostiquer la connexion";
+                                                    icon: "activity";
+                                                    clicked => {
+                                                        root.diagnose-ollama();
+                                                        settings-popup.close();
+                                                    }
+                                                }
+
+                                                Rectangle { horizontal-stretch: 1; }
+                                            }
+
+                                            HDivider { }
+
+                                            Label {
+                                                text: "EXÉCUTION DE COMMANDES";
+                                                font-size: Theme.font-xs;
+                                                font-weight: 700;
+                                                letter-spacing: Theme.tracking;
+                                                color: Palette.text-faint;
+                                            }
+
+                                            ModeOption {
+                                                label: "Validation";
+                                                description: "Chaque commande demande une approbation.";
+                                                selected: root.approval-mode == "validation";
+                                                chosen => { root.set-approval-mode("validation"); }
+                                            }
+
+                                            ModeOption {
+                                                label: "Auto — restrictif";
+                                                description: "Les commandes déjà autorisées et mémorisées s'exécutent seules ; les autres demandent.";
+                                                selected: root.approval-mode == "auto-restricted";
+                                                chosen => { root.set-approval-mode("auto-restricted"); }
+                                            }
+
+                                            ModeOption {
+                                                label: "Auto — non sûr";
+                                                description: "Tout s'exécute automatiquement, sauf la liste noire de sécurité.";
+                                                selected: root.approval-mode == "auto-unsafe";
+                                                chosen => { root.set-approval-mode("auto-unsafe"); }
+                                            }
+
+                                            Label {
+                                                text: "COMMANDES MÉMORISÉES";
+                                                font-size: Theme.font-xs;
+                                                font-weight: 700;
+                                                letter-spacing: Theme.tracking;
+                                                color: Palette.text-faint;
+                                            }
+
+                                            if root.command-allowlist.length == 0: Label {
+                                                text: "Aucune.";
+                                                font-size: Theme.font-xs;
+                                                font-italic: true;
+                                                color: Palette.text-faint;
+                                            }
+
+                                            for entry in root.command-allowlist: HorizontalLayout {
+                                                spacing: Theme.space-2;
+
+                                                VerticalLayout {
+                                                    alignment: center;
+                                                    horizontal-stretch: 1;
+
+                                                    Label {
+                                                        text: entry.display;
+                                                        font-size: Theme.font-xs;
+                                                        font-family: "Menlo, monospace";
+                                                        overflow: elide;
+                                                    }
+                                                }
+
+                                                IconButton {
+                                                    icon: "x";
+                                                    label: "Oublier cette commande";
+                                                    icon-size: 12px;
+                                                    clicked => { root.forget-allowlist-entry(entry.key); }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        VerticalLayout {
+                            alignment: center;
+
+                            IconButton {
+                                icon: "activity";
+                                label: "Ping";
+                                icon-color: Palette.text-faint;
+                                clicked => { root.ping(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        HDivider { }
+
+        // ---------- main content ----------
+        HorizontalLayout {
+            // -- sessions sidebar --
+            Rectangle {
+                width: Theme.sidebar-w;
+                background: Palette.sidebar;
+
+                VerticalLayout {
+                    // One header block instead of two blocks separated by a
+                    // hairline: the sidebar had three stacked `HDivider`s
+                    // inside 220px, which is more structure than a column
+                    // this narrow needs once its rows respond to hover. The
+                    // sidebar's own background already separates it from the
+                    // chat column, and the list's first date-group header
+                    // separates the list from this block. Height is explicit
+                    // (space-3 + 32px button + space-2 + 28px field +
+                    // space-3) rather than content-derived, for the same
+                    // reason the footer's is: content-derived heights depend
+                    // on render-time font metrics and drift.
+                    Rectangle {
+                        height: 92px;
+                        vertical-stretch: 0;
+
+                        VerticalLayout {
+                            padding: Theme.space-3;
+                            spacing: Theme.space-2;
+
+                            Rectangle {
+                                // Filled, not outlined - same reasoning as
+                                // `model-badge`/`settings-badge` in the
+                                // titlebar.
+                                border-radius: Theme.radius;
+                                background: new-session-touch.pressed ? Palette.border
+                                    : new-session-touch.has-hover ? Palette.surface-press
+                                    : Palette.surface-hover;
+                                height: 32px;
+
+                                animate background { duration: Theme.anim-fast; easing: ease-out; }
+
+                                new-session-touch := TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => {
+                                        root.stick-to-bottom = true;
+                                        root.new-session();
+                                    }
+                                }
+
+                                // An `Icon` (Image) plus one `Label`, not two
+                                // `Label`s - this used to be a single Label
+                                // reading "+ Nouvelle tâche" specifically to
+                                // avoid two glyphs with different font-metric
+                                // baselines drifting apart (see the plan
+                                // chip's icon+label row, which uses the same
+                                // Image-plus-Label shape and does not have
+                                // that problem: an Image is centered by its
+                                // own box, not by font metrics, so there is no
+                                // second baseline to drift from the Label's).
+                                HorizontalLayout {
+                                    alignment: center;
+                                    spacing: Theme.space-2;
+
+                                    VerticalLayout {
+                                        alignment: center;
+
+                                        Icon {
+                                            name: "plus";
+                                            width: 13px;
+                                            height: 13px;
+                                            colorize: Palette.text;
+                                        }
+                                    }
+
+                                    Label {
+                                        text: "Nouvelle tâche";
+                                        font-size: Theme.font-md;
+                                        font-weight: 600;
+                                        y: Theme.optical-center-y(parent.height, self.height);
+                                    }
+                                }
+                            }
+
+                            SearchField {
+                                placeholder: "Rechercher…";
+                                edited(text) => { root.search-sessions(text); }
+                            }
+                        }
+                    }
+
+                    ListView {
+                        vertical-stretch: 1;
+
+                        for row in root.sessions: SessionRow {
+                            item: row;
+                            active: row.id == root.active-session-id;
+                            selected => {
+                                root.stick-to-bottom = true;
+                                root.select-session(row.id);
+                            }
+                        }
+                    }
+
+                    HDivider { }
+
+                    Rectangle {
+                        // Same token as the chat column's composer block, so
+                        // the two `Divider`s above them are one continuous
+                        // line. Content height was previously left to size
+                        // itself from padding + rows, which depends on real
+                        // font-metric line-heights at render time and drifted
+                        // from the composer's; `clip: true` keeps that a hard
+                        // guarantee.
+                        height: Theme.bottom-bar-h;
+                        clip: true;
+                        vertical-stretch: 0;
+
+                        VerticalLayout {
+                            padding: Theme.space-3;
+                            spacing: Theme.space-2;
+
+                            Rectangle {
+                                height: 16px;
+                                opacity: root.current-undo-id != "" ? 1.0 : 0.5;
+
+                                undo-touch := TouchArea {
+                                    enabled: root.current-undo-id != "";
+                                    mouse-cursor: self.enabled ? MouseCursor.pointer : MouseCursor.default;
+                                    clicked => { root.undo(root.current-undo-id); }
+                                }
+
+                                HorizontalLayout {
+                                    // `alignment: start`, else the default
+                                    // (stretch) hands the leftover row width
+                                    // to the two labels, which then center
+                                    // their own text inside oversized cells -
+                                    // making a left-aligned footer row look
+                                    // centered and randomly indented.
+                                    width: 100%;
+                                    alignment: start;
+                                    spacing: Theme.space-1;
+
+                                    // No hover *background* on this row: it
+                                    // sits inside a fixed 64px clipped block
+                                    // whose height is shared with the chat
+                                    // composer, so a padded highlight can't
+                                    // be added without changing that shared
+                                    // token. The color shift alone still
+                                    // tells you the row is live.
+                                    // Wrapped in a centering layout - a
+                                    // fixed-size `Icon` as a direct child of
+                                    // this `HorizontalLayout` would otherwise
+                                    // top-align against the label next to it
+                                    // (Slint cross-axis rule, see `IconButton`
+                                    // and others above).
+                                    VerticalLayout {
+                                        alignment: center;
+
+                                        Icon {
+                                            name: "undo-2";
+                                            width: 12px;
+                                            height: 12px;
+                                            colorize: undo-touch.has-hover ? Palette.text : Palette.text-muted;
+                                            animate colorize { duration: Theme.anim-fast; easing: ease-out; }
+                                        }
+                                    }
+
+                                    Label {
+                                        text: "Annuler la dernière opération";
+                                        font-size: Theme.font-xs;
+                                        color: undo-touch.has-hover ? Palette.text : Palette.text-muted;
+                                        animate color { duration: Theme.anim-fast; easing: ease-out; }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                height: 16px;
+
+                                HorizontalLayout {
+                                    width: 100%;
+                                    alignment: start;
+                                    spacing: Theme.space-1;
+
+                                    Label {
+                                        text: "○";
+                                        font-size: Theme.font-xs;
+                                        color: Palette.text-faint;
+                                    }
+
+                                    Label {
+                                        text: "Tout s'exécute en local";
+                                        font-size: Theme.font-xs;
+                                        color: Palette.text-faint;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            VDivider { }
+
+            // -- chat column --
+            VerticalLayout {
+                horizontal-stretch: 1;
+
+                // A plain `ScrollView` over a `VerticalLayout`, not a
+                // `ListView`. `ListView` virtualizes, which buys nothing at
+                // this list's size (the chat holds at most
+                // `MAX_HISTORY_MESSAGES` rows, see crates/app/src/main.rs)
+                // and costs two things that were visible on screen. Its
+                // viewport height is extrapolated from a running average of
+                // the instantiated rows' heights (`RepeaterLayoutState::
+                // cached_item_height` in i-slint-core), so with chat rows
+                // ranging from one line to forty the scrollbar kept resizing
+                // and the position drifted while scrolling. And its
+                // `viewport-y` is owned by the runtime layout - the
+                // compiler's flickable pass explicitly skips binding it for
+                // ListView - so the stick-to-bottom handler below could not
+                // drive it at all.
+                chat-scroll := ScrollView {
+                    vertical-stretch: 1;
+
+                    // `viewport-height` is the laid-out height of the content
+                    // and grows on every pass that adds text, which makes it
+                    // the signal for "the reply got longer". This is the only
+                    // place `viewport-y` is written.
+                    //
+                    // `visible-height - viewport-height` is the bottom-most
+                    // scroll position (negative once the content overflows);
+                    // `min(0px, ...)` keeps a conversation shorter than the
+                    // viewport pinned at the top instead of pushing it up.
+                    changed viewport-height => {
+                        if root.stick-to-bottom {
+                            chat-scroll.viewport-y = min(0px, chat-scroll.visible-height - chat-scroll.viewport-height);
+                        }
+                    }
+
+                    // Scrolling is what arms and disarms the stick, so
+                    // reading back through a reply stops it jumping to the
+                    // end, and scrolling back down resumes following it.
+                    scrolled => {
+                        root.stick-to-bottom = chat-scroll.viewport-y - (chat-scroll.visible-height - chat-scroll.viewport-height) <= Theme.stick-slack;
+                    }
+
+                    VerticalLayout {
+                        // Without this the layout stretches its rows to fill
+                        // the viewport whenever the conversation is shorter
+                        // than the window.
+                        alignment: start;
+                        // Extra clearance above/below `ChatMessageRow`'s own
+                        // space-3 turn padding, so the first/last message
+                        // doesn't sit flush against the titlebar divider or
+                        // the composer's HDivider.
+                        padding-top: Theme.space-4;
+                        padding-bottom: Theme.space-2;
+
+                        for msg in root.messages: ChatMessageRow {
+                            msg: msg;
+                            plan-chip-clicked => { root.open-plan(); }
+                            copy-clicked(text) => { root.copy-message(text); }
+                        }
+                    }
+                }
+
+                // Command approval card, above the composer - the one spot
+                // visible whether the request comes from a plan step or from
+                // reconnaissance during planning.
+                if root.has-approval: Rectangle {
+                    vertical-stretch: 0;
+                    background: Palette.bg;
+
+                    VerticalLayout {
+                        padding-left: Theme.space-5;
+                        padding-right: Theme.space-5;
+                        padding-top: Theme.space-3;
+
+                        ApprovalCard {
+                            argv: root.approval-argv;
+                            argv-class: root.approval-argv-class;
+                            shell: root.approval-shell;
+                            cwd: root.approval-cwd;
+                            program: root.approval-program;
+                            origin: root.approval-origin;
+                            rememberable: root.approval-rememberable;
+                            answer(decision) => {
+                                root.approve-command(root.approval-request-id, decision);
+                            }
+                        }
+                    }
+                }
+
+                HDivider { }
+
+                Rectangle {
+                    height: Theme.bottom-bar-h;
+                    vertical-stretch: 0;
+                    background: Palette.bg;
+
+                    VerticalLayout {
+                        padding-left: Theme.space-5;
+                        padding-right: Theme.space-5;
+                        padding-top: Theme.space-3;
+                        padding-bottom: Theme.space-4;
+
+                        HorizontalLayout {
+                            spacing: Theme.space-2;
+
+                            Composer {
+                                horizontal-stretch: 1;
+                                placeholder: "Demande à Lito de ranger, renommer ou nettoyer des fichiers…";
+                                enabled: !root.is-processing;
+                                accepted => {
+                                    root.stick-to-bottom = true;
+                                    root.send-message(self.text, "");
+                                    self.text = "";
+                                }
+                            }
+
+                            // "Arrêter" appears beside the (disabled) composer
+                            // during generation rather than replacing it, so
+                            // the row's geometry doesn't jump on every send.
+                            // Wrapped and stretch-pinned for the usual two
+                            // reasons: a fixed-height child of a
+                            // `HorizontalLayout` is top-aligned, and an
+                            // unpinned layout would take half the row.
+                            if root.is-processing: VerticalLayout {
+                                alignment: center;
+                                horizontal-stretch: 0;
+
+                                ActionButton {
+                                    label: "Arrêter";
+                                    icon: "x";
+                                    tone: ActionTone.danger;
+                                    clicked => { root.cancel(); }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // -- plan inspector column --
+            if root.show-plan: VDivider { }
+
+            if root.show-plan: Rectangle {
+                width: Theme.plan-w;
+                background: Palette.sidebar;
+
+                VerticalLayout {
+                    Rectangle {
+                        vertical-stretch: 0;
+
+                        VerticalLayout {
+                            padding-left: Theme.space-3;
+                            padding-right: Theme.space-3;
+                            padding-top: Theme.space-2;
+                            padding-bottom: Theme.space-2;
+
+                            HorizontalLayout {
+                                spacing: Theme.space-2;
+
+                                // The title carries the plan's disposition, not just its
+                                // step count - it's the single most prominent element in this
+                                // panel (bold, uppercase, tracked), so a state that needs to
+                                // register (rejected) belongs here rather than in a small
+                                // italic line further down that's easy to miss and, worse, sat
+                                // in a row padded for `ActionButton`'s own inset (see the
+                                // action row below) - a plain `Label` there rendered flush with
+                                // that inset instead of with this title, i.e. visibly
+                                // misaligned. `danger`/`success` reuse the same semantic colors
+                                // `StatusBadge` already uses for step status, nothing new.
+                                Label {
+                                    text: root.current-plan-status == "streaming" ? "PLAN EN COURS"
+                                        : root.current-plan-status == "rejected" ? "PLAN REJETÉ"
+                                        : root.current-plan-status == "done" ? "PLAN EXÉCUTÉ"
+                                        : "PLAN PROPOSÉ";
+                                    font-size: Theme.font-sm;
+                                    font-weight: 700;
+                                    letter-spacing: Theme.tracking;
+                                    color: root.current-plan-status == "rejected" ? Palette.danger
+                                        : root.current-plan-status == "done" ? Palette.success
+                                        : Palette.text;
+                                }
+
+                                Rectangle { horizontal-stretch: 1; }
+
+                                Label {
+                                    text: root.plan-steps.length + " étapes";
+                                    font-size: Theme.font-xs;
+                                    color: Palette.text-faint;
+                                }
+
+                                VerticalLayout {
+                                    alignment: center;
+
+                                    IconButton {
+                                        icon: "x";
+                                        label: "Fermer le panneau de plan";
+                                        icon-size: 13px;
+                                        icon-color: Palette.text-faint;
+                                        clicked => { root.close-plan(); }
+                                    }
+                                }
+                            }
+
+                            // No id exists until the plan is complete and
+                            // persisted, so while it streams this line shows
+                            // what's happening instead of "Plan " - and it is
+                            // the panel's only progress indicator: no
+                            // execute/reject actions (nothing is runnable
+                            // yet) and no caret of its own, since the steps
+                            // arriving one by one under it already read as
+                            // live.
+                            Label {
+                                text: root.current-plan-status == "streaming"
+                                    ? "Le modèle écrit le plan…"
+                                    : "Plan " + root.current-plan-id;
+                                font-italic: root.current-plan-status == "streaming";
+                                font-size: Theme.font-sm;
+                                color: root.current-plan-status == "streaming" ? Palette.text-faint : Palette.text-muted;
+                            }
+
+                            // The action row lives in the same header block
+                            // as the title now, with no hairline between
+                            // them: the buttons are ghosts, so a divider
+                            // would be the only thing framing them and would
+                            // read as the heavier element of the two.
+                            // `padding-left: -space-3` cancels `ActionButton`'s
+                            // own inner padding (also space-3) exactly, so its
+                            // icon aligns with the "PLAN PROPOSÉ" label above
+                            // rather than sitting a step to its right -
+                            // measured at +4px with a space-2 offset, 0px with
+                            // this one.
+                            HorizontalLayout {
+                                alignment: start;
+                                spacing: 0px;
+                                padding-left: -Theme.space-3;
+                                padding-top: Theme.space-1;
+
+                                if root.current-plan-status == "pending": ActionButton {
+                                    label: "Rejeter";
+                                    icon: "x";
+                                    tone: ActionTone.danger;
+                                    enabled: !root.is-processing;
+                                    clicked => { root.reject-plan(root.current-plan-id); }
+                                }
+
+                                if root.current-plan-status == "pending": ActionButton {
+                                    label: "Exécuter";
+                                    icon: "play";
+                                    tone: ActionTone.success;
+                                    enabled: !root.is-processing;
+                                    clicked => { root.execute-plan(root.current-plan-id); }
+                                }
+
+                                if root.current-plan-status == "done": ActionButton {
+                                    label: "Annuler";
+                                    icon: "undo-2";
+                                    tone: ActionTone.danger;
+                                    enabled: root.current-undo-id != "";
+                                    clicked => { root.undo(root.current-undo-id); }
+                                }
+
+                                // No "rejected" branch here anymore - that
+                                // state is now carried by the title above
+                                // (see its comment). This row simply renders
+                                // empty for "rejected", same as it already
+                                // did for "streaming".
+                            }
+                        }
+                    }
+
+                    HDivider { }
+
+                    // Dimmed once the plan is rejected - same `opacity: 0.5`
+                    // idiom used for disabled controls elsewhere in this
+                    // file. Without it every step still carries its "En
+                    // attente" badge, which reads as "this will still run"
+                    // even though nothing here executes anymore.
+                    ListView {
+                        vertical-stretch: 1;
+                        opacity: root.current-plan-status == "rejected" ? 0.5 : 1.0;
+
+                        for step in root.plan-steps: VerticalLayout {
+                            padding-left: Theme.space-2;
+                            padding-right: Theme.space-2;
+                            padding-top: Theme.space-2;
+                            padding-bottom: 0px;
+
+                            // Local, per-row disclosure state for a
+                            // RUN_COMMAND step's captured output. Resets when
+                            // `plan-steps` is rebuilt wholesale, like the
+                            // chat's `show-raw`.
+                            private property <bool> output-expanded: false;
+
+                            Rectangle {
+                                // Filled block, not a 1px outline. `surface`
+                                // on the panel's `sidebar` background is only
+                                // ~2 units of lightness apart, so a
+                                // borderless `surface` card would be
+                                // invisible - `bubble-bg` is the existing
+                                // "filled content block" token (user bubbles,
+                                // reasoning block) and separates cleanly from
+                                // the panel in both themes.
+                                background: Palette.bubble-bg;
+                                border-radius: Theme.radius;
+
+                                HorizontalLayout {
+                                    padding: Theme.space-2;
+                                    spacing: Theme.space-2;
+
+                                    VerticalLayout {
+                                        alignment: start;
+
+                                        Rectangle {
+                                            width: 24px;
+                                            height: 24px;
+                                            border-radius: Theme.radius;
+                                            background: step.status == "done" ? Palette.success-soft : step.status == "error" ? Palette.danger-soft : Palette.warn-soft;
+
+                                            OpIcon {
+                                                operation: step.operation;
+                                                colorize: step.status == "done" ? Palette.success : step.status == "error" ? Palette.danger : Palette.warn;
+                                            }
+                                        }
+                                    }
+
+                                    VerticalLayout {
+                                        spacing: Theme.space-1;
+
+                                        HorizontalLayout {
+                                            spacing: Theme.space-2;
+
+                                            Label {
+                                                text: step.operation + " · " + step.step + "/" + step.total;
+                                                font-size: Theme.font-sm;
+                                                font-weight: 700;
+                                                letter-spacing: Theme.tracking;
+                                            }
+
+                                            Rectangle { horizontal-stretch: 1; }
+
+                                            // A step mid-execution can sit on a
+                                            // slow `RUN_COMMAND` (or an
+                                            // approval round-trip) for a while;
+                                            // the spinner says it's live, not
+                                            // stuck.
+                                            if step.status == "running": VerticalLayout {
+                                                alignment: center;
+
+                                                Spinner {
+                                                    size: 13px;
+                                                    tint: Palette.warn;
+                                                }
+                                            }
+
+                                            VerticalLayout {
+                                                alignment: center;
+
+                                                StatusBadge {
+                                                    status: step.status;
+                                                }
+                                            }
+                                        }
+
+                                        // Proportional, not `Menlo`: despite
+                                        // the field sometimes holding a path,
+                                        // `PlanStep::description` is defined
+                                        // (see `agent/src/lib.rs`) as a
+                                        // short human-readable sentence
+                                        // ("Create Captures folder on
+                                        // Desktop"), not code or a raw path -
+                                        // monospace on prose read as dated
+                                        // rather than technical.
+                                        CopiableText {
+                                            text: step.description;
+                                            font-size: Theme.font-sm;
+                                            color: Palette.text-muted;
+                                        }
+
+                                        // RUN_COMMAND: the command line and,
+                                        // once it has run, its folded output.
+                                        // Highlighted like a code block's
+                                        // lines (`step.command-line`, see
+                                        // `highlight.rs`). Clipped, not
+                                        // horizontally scrollable like the
+                                        // chat's code blocks: this row lives
+                                        // inside `ListView`, and a nested
+                                        // `ScrollView` in a `ListView` row
+                                        // never resolves a size (verified -
+                                        // `command-row.preferred-height`
+                                        // stayed `0` however it was bound,
+                                        // rendering the whole line invisible)
+                                        // - some interaction between
+                                        // `ListView`'s row-height estimation
+                                        // and a nested `Flickable`'s own
+                                        // circular size binding. `clip: true`
+                                        // is the fallback: this panel is a
+                                        // fixed `Theme.plan-w` (300px) wide,
+                                        // and a real command can run well
+                                        // past that; without it the overrun
+                                        // draws straight past the window's
+                                        // own right edge (verified). The
+                                        // literal "$ " prefix is its own
+                                        // `CodeSpan` (not a `Label`) purely so
+                                        // it shares the exact same box
+                                        // metrics as the spans next to it - a
+                                        // `Label`'s extra accent headroom
+                                        // would sit it slightly taller than
+                                        // the command text beside it.
+                                        // `clip` only applies to a `Rectangle`
+                                        // (or `Path`), not to a layout
+                                        // directly - hence the wrapper.
+                                        if step.command != "": Rectangle {
+                                            // `min-width: 0`: `clip` only
+                                            // affects painting, not layout -
+                                            // without this a `Rectangle`
+                                            // otherwise still negotiates its
+                                            // *preferred* width from the
+                                            // unclipped row inside it (the
+                                            // bottom-up sizing pass, unrelated
+                                            // to the top-down `width` a plain
+                                            // `width: 100%` binds - tried
+                                            // that first, verified it alone
+                                            // doesn't fix this), which pushed
+                                            // the whole `Theme.plan-w` column,
+                                            // and with it the window, wider
+                                            // than the window itself for a
+                                            // long command (verified). Same
+                                            // fix as `code-scroll`'s
+                                            // `min-width: 0` above, same
+                                            // reason.
+                                            min-width: 0px;
+                                            clip: true;
+                                            height: command-line-row.preferred-height;
+
+                                            command-line-row := HorizontalLayout {
+                                                alignment: start;
+                                                spacing: 0px;
+
+                                                CodeSpan {
+                                                    text: "$ ";
+                                                    plain-color: Palette.text-muted;
+                                                    font-size: Theme.font-sm;
+                                                }
+
+                                                for span[si] in step.command-line: CodeSpan {
+                                                    text: span.text;
+                                                    cls: span.class;
+                                                    plain-color: Palette.text-muted;
+                                                    font-size: Theme.font-sm;
+                                                }
+                                            }
+                                        }
+
+                                        if step.command != "": Label {
+                                            text: (step.shell ? "shell · " : "") + step.cwd + " · non annulable";
+                                            font-size: Theme.font-xs;
+                                            color: Palette.text-faint;
+                                            wrap: word-wrap;
+                                        }
+
+                                        if step.command-ran: VerticalLayout {
+                                            spacing: Theme.space-1;
+
+                                            HorizontalLayout {
+                                                alignment: start;
+                                                spacing: Theme.space-1;
+
+                                                VerticalLayout {
+                                                    alignment: center;
+
+                                                    Label {
+                                                        text: "SORTIE · CODE " + step.exit-code + (step.output-truncated ? " · TRONQUÉE" : "");
+                                                        font-size: Theme.font-xs;
+                                                        font-weight: 700;
+                                                        letter-spacing: Theme.tracking;
+                                                        color: Palette.text-faint;
+                                                    }
+                                                }
+
+                                                VerticalLayout {
+                                                    alignment: center;
+
+                                                    IconButton {
+                                                        icon: output-expanded ? "chevron-up" : "chevron-down";
+                                                        label: output-expanded ? "Masquer la sortie" : "Afficher la sortie";
+                                                        icon-size: 13px;
+                                                        hover-bg: Palette.surface-press;
+                                                        press-bg: Palette.border;
+                                                        clicked => { output-expanded = !output-expanded; }
+                                                    }
+                                                }
+                                            }
+
+                                            if output-expanded && step.stdout != "": CopiableText {
+                                                text: step.stdout;
+                                                font-family: "Menlo, monospace";
+                                                font-size: Theme.font-xs;
+                                                color: Palette.text-muted;
+                                            }
+
+                                            if output-expanded && step.stderr != "": CopiableText {
+                                                text: step.stderr;
+                                                font-family: "Menlo, monospace";
+                                                font-size: Theme.font-xs;
+                                                color: Palette.danger;
+                                            }
+
+                                            if output-expanded && step.stdout == "" && step.stderr == "": Label {
+                                                text: "(aucune sortie)";
+                                                font-size: Theme.font-xs;
+                                                font-italic: true;
+                                                color: Palette.text-faint;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------- Ollama connectivity diagnostic modal ----------
+    // A direct child of the Window (sibling of the main VerticalLayout above),
+    // declared last so it paints on top - Slint has no z-index, paint and hit
+    // order both follow document order. The scrim fills the window and
+    // swallows clicks so the app behind it is inert while the modal is open;
+    // it deliberately does NOT dismiss on an outside click - the modal has an
+    // explicit close button, and losing a half-followed sign-in instruction
+    // to a stray click would be worse than one extra click to close.
+    //
+    // The card is nested inside centering layouts (not free-positioned in the
+    // scrim Rectangle) so its wrapped body text is measured in two passes at
+    // the real content width - a `Rectangle`'s free child is measured
+    // unconstrained first, which collapses wrapped `Text` to one line and then
+    // clips it once layout applies the true width.
+    if root.diagnosis-visible: Rectangle {
+        background: #000000a6;
+
+        TouchArea { mouse-cursor: default; }
+
+        HorizontalLayout {
+            alignment: center;
+
+            VerticalLayout {
+                alignment: center;
+
+                Rectangle {
+                    width: min(440px, root.width - 2 * Theme.space-5);
+                    // `sidebar`, not `surface`: this card floats on the scrim,
+                    // and in the dark theme `surface` equals the window
+                    // background, so a `surface` card would be invisible
+                    // against the dimmed app behind it. `sidebar` is the
+                    // "raised panel" tone (also used by the sessions/plan
+                    // columns) and separates in both themes.
+                    background: Palette.sidebar;
+                    border-width: 1px;
+                    border-color: Palette.border;
+                    border-radius: Theme.radius;
+
+                    VerticalLayout {
+                        padding: Theme.space-4;
+                        spacing: Theme.space-3;
+
+                        HorizontalLayout {
+                            spacing: Theme.space-2;
+
+                            Label {
+                                text: root.diagnosing ? "Diagnostic en cours…" : root.diagnosis-title;
+                                font-size: Theme.font-md;
+                                font-weight: 700;
+                                horizontal-stretch: 1;
+                                wrap: word-wrap;
+                            }
+
+                            if !root.diagnosing: IconButton {
+                                icon: "x";
+                                label: "Fermer";
+                                icon-size: 12px;
+                                clicked => { root.dismiss-diagnosis(); }
+                            }
+                        }
+
+                        if root.diagnosing: CopiableText {
+                            text: "Test du modèle sélectionné, jusqu'à 20 s pour un modèle cloud…";
+                            font-size: Theme.font-sm;
+                            color: Palette.text-muted;
+                        }
+
+                        if !root.diagnosing: CopiableText {
+                            text: root.diagnosis-detail;
+                            font-size: Theme.font-sm;
+                            color: Palette.text-muted;
+                        }
+
+                        // Sign-in instructions - only for the cloud-auth case.
+                        if !root.diagnosing && root.diagnosis-needs-signin: Rectangle {
+                            background: Palette.bubble-bg;
+                            border-radius: Theme.radius;
+
+                            VerticalLayout {
+                                padding: Theme.space-3;
+                                spacing: Theme.space-2;
+
+                                Label {
+                                    text: "Se connecter à Ollama";
+                                    font-size: Theme.font-sm;
+                                    font-weight: 700;
+                                }
+
+                                CopiableText {
+                                    text: "1. Dans un terminal, lance la commande :";
+                                    font-size: Theme.font-sm;
+                                    color: Palette.text-muted;
+                                }
+
+                                Rectangle {
+                                    height: 30px;
+                                    background: Palette.surface;
+                                    border-width: 1px;
+                                    border-color: Palette.border;
+                                    border-radius: Theme.radius;
+
+                                    HorizontalLayout {
+                                        padding-left: Theme.space-2;
+                                        padding-right: Theme.space-2;
+
+                                        CopiableText {
+                                            text: "ollama signin";
+                                            font-family: "Menlo, monospace";
+                                            font-size: Theme.font-sm;
+                                            color: Palette.text;
+                                        }
+                                    }
+                                }
+
+                                CopiableText {
+                                    text: "2. Ouvre le lien affiché pour autoriser l'accès, puis relance ta demande. Sinon, choisis un modèle local dans le sélecteur en haut de la fenêtre.";
+                                    font-size: Theme.font-sm;
+                                    color: Palette.text-muted;
+                                }
+                            }
+                        }
+
+                        if !root.diagnosing: HorizontalLayout {
+                            Rectangle { horizontal-stretch: 1; }
+
+                            ActionButton {
+                                label: "Fermer";
+                                icon: "check";
+                                tone: root.diagnosis-ok ? ActionTone.success : ActionTone.neutral;
+                                clicked => { root.dismiss-diagnosis(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

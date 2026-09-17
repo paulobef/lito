@@ -1,0 +1,234 @@
+{
+  "ollama-connected": true,
+  "ollama-model": "qwen2.5-coder:7b",
+  "ollama-endpoint": "http://localhost:11434",
+  "default-ollama-endpoint": "http://localhost:11434",
+  "available-models": [
+    "qwen2.5-coder:7b",
+    "llama3.2:3b",
+    "mistral:7b"
+  ],
+  "current-model-index": 0,
+  "is-processing": false,
+  "current-plan-id": "plan-1",
+  "current-plan-status": "pending",
+  "current-undo-id": "",
+  "show-plan": true,
+  "active-session-id": "s1",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Range mes captures d'écran du bureau dans un dossier par mois",
+      "thinking": "",
+      "streaming": false,
+      "plan-id": "",
+      "plan-step-count": 0,
+      "content-plain": "Range mes captures d'écran du bureau dans un dossier par mois",
+      "blocks": [],
+      "thinking-preview": ""
+    },
+    {
+      "role": "assistant",
+      "content": "## Ce que je vais faire\n\nJe crée un dossier par mois et j'y déplace les captures correspondantes. Vérifie le plan avant de l'exécuter.\n\n```bash\nmkdir -p ~/Desktop/2026-08\nmv ~/Desktop/Capture*.png ~/Desktop/2026-08/\n```\n\n- 2 captures d'août 2026\n- aucun doublon détecté",
+      "thinking": "L'utilisateur veut regrouper les fichiers par date de création. Je liste d'abord le bureau, puis je crée un dossier par mois rencontré.",
+      "streaming": false,
+      "plan-id": "plan-1",
+      "plan-step-count": 3,
+      "content-plain": "Ce que je vais faire\n\nJe crée un dossier par mois et j'y déplace les captures correspondantes. Vérifie le plan avant de l'exécuter.\n\nmkdir -p ~/Desktop/2026-08\nmv ~/Desktop/Capture*.png ~/Desktop/2026-08/\n\n- 2 captures d'août 2026\n- aucun doublon détecté",
+      "blocks": [
+        {
+          "kind": "heading",
+          "content": "Ce que je vais faire",
+          "language": "",
+          "heading-level": 2,
+          "list-item": false,
+          "lines": []
+        },
+        {
+          "kind": "text",
+          "content": "Je crée un dossier par mois et j'y déplace les captures correspondantes. Vérifie le plan avant de l'exécuter.",
+          "language": "",
+          "heading-level": 0,
+          "list-item": false,
+          "lines": []
+        },
+        {
+          "kind": "code",
+          "content": "mkdir -p ~/Desktop/2026-08\nmv ~/Desktop/Capture*.png ~/Desktop/2026-08/",
+          "language": "bash",
+          "heading-level": 0,
+          "list-item": false,
+          "lines": [
+            {
+              "spans": [
+                {
+                  "text": "mkdir",
+                  "class": "function"
+                },
+                {
+                  "text": " ",
+                  "class": "plain"
+                },
+                {
+                  "text": "-p",
+                  "class": "keyword"
+                },
+                {
+                  "text": " ~/Desktop/",
+                  "class": "plain"
+                },
+                {
+                  "text": "2026",
+                  "class": "number"
+                },
+                {
+                  "text": "-",
+                  "class": "plain"
+                },
+                {
+                  "text": "08",
+                  "class": "number"
+                }
+              ]
+            },
+            {
+              "spans": [
+                {
+                  "text": "mv",
+                  "class": "function"
+                },
+                {
+                  "text": " ~/Desktop/Capture*.png ~/Desktop/",
+                  "class": "plain"
+                },
+                {
+                  "text": "2026",
+                  "class": "number"
+                },
+                {
+                  "text": "-",
+                  "class": "plain"
+                },
+                {
+                  "text": "08",
+                  "class": "number"
+                },
+                {
+                  "text": "/",
+                  "class": "plain"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "text",
+          "content": "- 2 captures d'août 2026",
+          "language": "",
+          "heading-level": 0,
+          "list-item": true,
+          "lines": []
+        },
+        {
+          "kind": "text",
+          "content": "- aucun doublon détecté",
+          "language": "",
+          "heading-level": 0,
+          "list-item": true,
+          "lines": []
+        }
+      ],
+      "thinking-preview": "L'utilisateur veut regrouper les fichiers par date de création. Je…"
+    }
+  ],
+  "plan-steps": [
+    {
+      "step": 1,
+      "total": 3,
+      "description": "~/Desktop/2026-08",
+      "operation": "MKDIR",
+      "status": "done",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 2,
+      "total": 3,
+      "description": "~/Desktop/Capture d'écran 2026-08-01 à 14.23.45.png → ~/Desktop/2026-08/",
+      "operation": "MOVE",
+      "status": "running",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 3,
+      "total": 3,
+      "description": "~/Desktop/Capture d'écran 2026-08-04 à 09.12.03.png → ~/Desktop/2026-08/",
+      "operation": "MOVE",
+      "status": "pending",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    }
+  ],
+  "sessions": [
+    {
+      "id": "s1",
+      "title": "Ranger les captures d'écran",
+      "subtitle": "3 étapes",
+      "group-label": "Aujourd'hui"
+    },
+    {
+      "id": "s2",
+      "title": "Trier les téléchargements par type",
+      "subtitle": "7 étapes",
+      "group-label": ""
+    },
+    {
+      "id": "s3",
+      "title": "Nettoyer les doublons dans Documents",
+      "subtitle": "2 étapes",
+      "group-label": "Hier"
+    }
+  ],
+  "approval-mode": "validation",
+  "command-allowlist": [],
+  "has-approval": false,
+  "approval-request-id": "",
+  "approval-argv": [],
+  "approval-argv-class": [],
+  "approval-shell": false,
+  "approval-cwd": "",
+  "approval-program": "",
+  "approval-origin": "",
+  "approval-rememberable": false,
+  "diagnosis-visible": true,
+  "diagnosing": false,
+  "diagnosis-ok": false,
+  "diagnosis-needs-signin": true,
+  "diagnosis-title": "Le modèle cloud n'a pas répondu",
+  "diagnosis-detail": "« nemotron-3-ultra:cloud » est un modèle Ollama Cloud et n'a rien renvoyé en 20 s. Deux causes possibles :\n\n• un démarrage à froid — le premier appel à un modèle cloud passe par un routage côté Ollama qui peut prendre une à deux minutes. Réessaie simplement.\n• une session non authentifiée — si le problème persiste, connecte-toi avec « ollama signin ».\n\nEn attendant, un modèle local dans le sélecteur en haut répond immédiatement."
+}

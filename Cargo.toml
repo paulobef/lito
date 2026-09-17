@@ -1,0 +1,59 @@
+[workspace]
+members = [
+    "crates/app",
+    "crates/ui",
+    "crates/protocol",
+    "crates/agent",
+    "crates/fs",
+    "crates/llm",
+    "crates/memory",
+    "crates/policy",
+    "crates/exec",
+]
+resolver = "2"
+
+[workspace.dependencies]
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+strum = { version = "0.26", features = ["derive"] }
+notify = "6.1"
+walkdir = "2.4"
+rusqlite = { version = "0.31", features = ["bundled"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
+keyring = "2.0"
+lopdf = "0.33"
+docx-rs = "0.5"
+calamine = { version = "0.23", features = ["xlsx"] }
+fastembed = { version = "0.5", features = ["onnx"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-util = { version = "0.7", features = ["full"] }
+slint = { version = "1.6", features = ["renderer-skia"] }
+slint-build = "1.6"
+# Pinned to the exact version Cargo.lock already resolves `slint` 1.6's
+# transitive winit backend to (see CLAUDE.md's note on the 1.6/1.17.1 skew) -
+# used directly (not through `slint::winit_030`, which needs an "unstable"
+# feature) so `crates/app` can install a custom `window_attributes_hook` for
+# the macOS transparent-titlebar setup. Version drift here would pull in a
+# second winit backend instance instead of reusing the one `slint` already
+# builds against.
+i-slint-backend-winit = { version = "=1.17.1", default-features = false, features = ["renderer-skia"] }
+winit = "=0.30.13"
+tokio-macros = "2.2"
+uuid = { version = "1.8", features = ["v4", "serde", "v7"] }
+anyhow = "1.0"
+copypasta = "0.10"
+# Same version i-slint-common already pulls in for `StyledText::from_markdown`
+# (0.13.4 in Cargo.lock), so this adds no new compilation unit - see
+# `crates/ui/src/markdown.rs`.
+pulldown-cmark = { version = "0.13", default-features = false }
+
+[profile.release]
+lto = true
+strip = true
+opt-level = 3
+panic = "abort"
+codegen-units = 1

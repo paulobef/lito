@@ -1,0 +1,427 @@
+{
+  "ollama-connected": false,
+  "ollama-model": "a-model-with-a-really-long-identifier:70b-instruct-q4_K_M",
+  "available-models": [
+    "a-model-with-a-really-long-identifier:70b-instruct-q4_K_M",
+    "b:1b"
+  ],
+  "current-model-index": 0,
+  "is-processing": true,
+  "current-plan-id": "plan-stress",
+  "current-plan-status": "pending",
+  "current-undo-id": "",
+  "show-plan": true,
+  "active-session-id": "s2",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Prends /Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/ et réorganise tout par année puis par trimestre, en supprimant les doublons exacts et en renommant les fichiers scannés qui ont encore leur nom d'origine du scanner",
+      "thinking": "",
+      "streaming": false,
+      "plan-id": "",
+      "plan-step-count": 0,
+      "content-plain": "Prends /Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/ et réorganise tout par année puis par trimestre, en supprimant les doublons exacts et en renommant les fichiers scannés qui ont encore leur nom d'origine du scanner",
+      "blocks": [],
+      "thinking-preview": ""
+    },
+    {
+      "role": "assistant",
+      "content": "D'accord. Je vais procéder en quatre temps : inventaire, création de l'arborescence année/trimestre, déduplication par hachage, puis renommage. Le chemin le plus profond rencontré est /Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/2021/T3/scan_20210914_141233_0001_recto-verso_haute-resolution.pdf — il dépasse largement la largeur du panneau.\n\n```bash\nfind /Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/2021/T3 -type f -name '*.pdf' -exec shasum -a 256 {} \\;\n```\n\n---\n\n| Trimestre | Fichiers | Doublons |\n| --- | --- | --- |\n| 2021-T3 | 148 | 12 |\n| 2021-T4 | 96 | 3 |",
+      "thinking": "Je dois d'abord vérifier qu'aucun fichier n'est ouvert par une autre application avant de déplacer quoi que ce soit. Ensuite, comparer les hachages SHA-256 plutôt que les noms, parce que le scanner produit des noms différents pour des documents identiques. Enfin, le renommage doit préserver la date d'origine du document, pas la date du fichier.",
+      "streaming": true,
+      "plan-id": "plan-stress",
+      "plan-step-count": 7,
+      "content-plain": "D'accord. Je vais procéder en quatre temps : inventaire, création de l'arborescence année/trimestre, déduplication par hachage, puis renommage. Le chemin le plus profond rencontré est /Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/2021/T3/scan_20210914_141233_0001_recto-verso_haute-resolution.pdf — il dépasse largement la largeur du panneau.\n\n```bash\nfind /Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/2021/T3 -type f -name '*.pdf' -exec shasum -a 256 {} \\;\n```\n\n---\n\n| Trimestre | Fichiers | Doublons |\n| --- | --- | --- |\n| 2021-T3 | 148 | 12 |\n| 2021-T4 | 96 | 3 |",
+      "blocks": [
+        {
+          "kind": "text",
+          "content": "D'accord. Je vais procéder en quatre temps : inventaire, création de l'arborescence année/trimestre, déduplication par hachage, puis renommage. Le chemin le plus profond rencontré est /Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/2021/T3/scan_20210914_141233_0001_recto-verso_haute-resolution.pdf — il dépasse largement la largeur du panneau.",
+          "language": "",
+          "heading-level": 0,
+          "list-item": false,
+          "lines": []
+        },
+        {
+          "kind": "code",
+          "content": "find /Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/2021/T3 -type f -name '*.pdf' -exec shasum -a 256 {} \\;",
+          "language": "bash",
+          "heading-level": 0,
+          "list-item": false,
+          "lines": [
+            {
+              "spans": [
+                {
+                  "text": "find",
+                  "class": "function"
+                },
+                {
+                  "text": " /Users/paulobef/Documents/Archives/",
+                  "class": "plain"
+                },
+                {
+                  "text": "2019",
+                  "class": "number"
+                },
+                {
+                  "text": "-",
+                  "class": "plain"
+                },
+                {
+                  "text": "2024",
+                  "class": "number"
+                },
+                {
+                  "text": "/Comptabilité/Factures-fournisseurs-et-notes-de-frais/",
+                  "class": "plain"
+                },
+                {
+                  "text": "2021",
+                  "class": "number"
+                },
+                {
+                  "text": "/T3 ",
+                  "class": "plain"
+                },
+                {
+                  "text": "-type",
+                  "class": "keyword"
+                },
+                {
+                  "text": " f ",
+                  "class": "plain"
+                },
+                {
+                  "text": "-name",
+                  "class": "keyword"
+                },
+                {
+                  "text": " ",
+                  "class": "plain"
+                },
+                {
+                  "text": "'*.pdf'",
+                  "class": "string"
+                },
+                {
+                  "text": " ",
+                  "class": "plain"
+                },
+                {
+                  "text": "-exec",
+                  "class": "keyword"
+                },
+                {
+                  "text": " shasum ",
+                  "class": "plain"
+                },
+                {
+                  "text": "-a",
+                  "class": "keyword"
+                },
+                {
+                  "text": " ",
+                  "class": "plain"
+                },
+                {
+                  "text": "256",
+                  "class": "number"
+                },
+                {
+                  "text": " {} \\;",
+                  "class": "plain"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "rule",
+          "content": "",
+          "language": "",
+          "heading-level": 0,
+          "list-item": false,
+          "lines": []
+        },
+        {
+          "kind": "text",
+          "content": "| Trimestre | Fichiers | Doublons |\n| --- | --- | --- |\n| 2021-T3 | 148 | 12 |\n| 2021-T4 | 96 | 3 |",
+          "language": "",
+          "heading-level": 0,
+          "list-item": false,
+          "lines": []
+        }
+      ],
+      "thinking-preview": "Je dois d'abord vérifier qu'aucun fichier n'est ouvert par une…"
+    }
+  ],
+  "plan-steps": [
+    {
+      "step": 1,
+      "total": 9,
+      "description": "/Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/2021/T3",
+      "operation": "MKDIR",
+      "status": "done",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 2,
+      "total": 9,
+      "description": "scan_20210914_141233_0001_recto-verso_haute-resolution.pdf → 2021/T3/2021-09-14_facture_fournisseur.pdf",
+      "operation": "RENAME",
+      "status": "done",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 3,
+      "total": 9,
+      "description": "2021/T3/2021-09-14_facture_fournisseur.pdf → /Volumes/Sauvegarde/Comptabilité/",
+      "operation": "COPY",
+      "status": "running",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 4,
+      "total": 9,
+      "description": "doublon-exact-sha256-9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08.pdf",
+      "operation": "DELETE",
+      "status": "error",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 5,
+      "total": 9,
+      "description": "~/Documents/Archives → ~/Bureau/Archives",
+      "operation": "SYMLINK",
+      "status": "pending",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 6,
+      "total": 9,
+      "description": "inventaire.csv",
+      "operation": "WRITE_FILE",
+      "status": "pending",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 7,
+      "total": 9,
+      "description": "2019-2024/Comptabilité/T4 → 2019-2024/Comptabilité/Q4",
+      "operation": "MOVE",
+      "status": "pending",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 8,
+      "total": 9,
+      "description": "Compter les PDF présents dans le dossier avant réorganisation",
+      "operation": "RUN_COMMAND",
+      "status": "done",
+      "command": "bash -c 'ls *.pdf | wc -l'",
+      "command-line": [
+        {
+          "text": "bash",
+          "class": "function"
+        },
+        {
+          "text": " ",
+          "class": "plain"
+        },
+        {
+          "text": "-c",
+          "class": "keyword"
+        },
+        {
+          "text": " ",
+          "class": "plain"
+        },
+        {
+          "text": "'ls *.pdf | wc -l'",
+          "class": "string"
+        }
+      ],
+      "shell": true,
+      "cwd": "/Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/2021/T3",
+      "irreversible": true,
+      "command-ran": true,
+      "exit-code": 0,
+      "stdout": "148\n",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 9,
+      "total": 9,
+      "description": "Générer l'inventaire complet avec les sommes de contrôle",
+      "operation": "RUN_COMMAND",
+      "status": "error",
+      "command": "shasum -a 256 -- *.pdf",
+      "command-line": [
+        {
+          "text": "shasum",
+          "class": "function"
+        },
+        {
+          "text": " ",
+          "class": "plain"
+        },
+        {
+          "text": "-a",
+          "class": "keyword"
+        },
+        {
+          "text": " ",
+          "class": "plain"
+        },
+        {
+          "text": "256",
+          "class": "number"
+        },
+        {
+          "text": " ",
+          "class": "plain"
+        },
+        {
+          "text": "--",
+          "class": "keyword"
+        },
+        {
+          "text": " *.pdf",
+          "class": "plain"
+        }
+      ],
+      "shell": false,
+      "cwd": "/Users/paulobef/Documents/Archives/2019-2024/Comptabilité/Factures-fournisseurs-et-notes-de-frais/2021/T3",
+      "irreversible": true,
+      "command-ran": true,
+      "exit-code": 1,
+      "stdout": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08  facture_2021-09-14.pdf\n",
+      "stderr": "shasum: scan_20210914_141233_0001.pdf: No such file or directory\n",
+      "output-truncated": true
+    }
+  ],
+  "sessions": [
+    {
+      "id": "s1",
+      "title": "Réorganisation complète des archives comptables 2019-2024 par année puis trimestre",
+      "subtitle": "127 étapes",
+      "group-label": "Aujourd'hui"
+    },
+    {
+      "id": "s2",
+      "title": "Doublons",
+      "subtitle": "1 étape",
+      "group-label": ""
+    },
+    {
+      "id": "s3",
+      "title": "/Users/paulobef/Documents/Archives/2019-2024/Comptabilité",
+      "subtitle": "0 étape",
+      "group-label": ""
+    },
+    {
+      "id": "s4",
+      "title": "Nettoyage du dossier Téléchargements",
+      "subtitle": "12 étapes",
+      "group-label": "Hier"
+    },
+    {
+      "id": "s5",
+      "title": "Renommage des photos de vacances",
+      "subtitle": "43 étapes",
+      "group-label": "3 juin"
+    },
+    {
+      "id": "s6",
+      "title": "Tri des factures",
+      "subtitle": "5 étapes",
+      "group-label": ""
+    },
+    {
+      "id": "s7",
+      "title": "Sauvegarde vers le disque externe",
+      "subtitle": "9 étapes",
+      "group-label": ""
+    },
+    {
+      "id": "s8",
+      "title": "Suppression des fichiers temporaires",
+      "subtitle": "31 étapes",
+      "group-label": ""
+    }
+  ],
+  "approval-mode": "validation",
+  "command-allowlist": [],
+  "has-approval": false,
+  "approval-request-id": "",
+  "approval-argv": [],
+  "approval-argv-class": [],
+  "approval-shell": false,
+  "approval-cwd": "",
+  "approval-program": "",
+  "approval-origin": "",
+  "approval-rememberable": false
+}

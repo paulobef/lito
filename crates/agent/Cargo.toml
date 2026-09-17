@@ -1,0 +1,18 @@
+[package]
+name = "lito-agent"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lito-protocol = { path = "../protocol" }
+lito-llm = { path = "../llm" }
+lito-memory = { path = "../memory" }
+lito-fs = { path = "../fs" }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+serde = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = { workspace = true }

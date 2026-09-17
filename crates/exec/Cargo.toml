@@ -1,0 +1,10 @@
+[package]
+name = "lito-exec"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lito-policy = { path = "../policy" }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }

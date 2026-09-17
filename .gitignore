@@ -1,0 +1,21 @@
+# Rust
+/target
+Cargo.lock.bak
+
+# Python (crates/ui/ui/pxsample.py)
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+.idea/
+
+# Claude Code local settings (machine-specific permission allowlist)
+.claude/settings.local.json
+
+# make ui-shot output
+/target/ui-shots/
+
+# make package / make dmg output (bundled .app and .dmg artifacts)
+*.app
+*.dmg

@@ -1,0 +1,123 @@
+{
+  "ollama-connected": true,
+  "ollama-model": "qwen2.5-coder:7b",
+  "available-models": [
+    "qwen2.5-coder:7b",
+    "llama3.2:3b",
+    "mistral:7b"
+  ],
+  "current-model-index": 0,
+  "is-processing": true,
+  "current-plan-id": "",
+  "current-plan-status": "streaming",
+  "current-undo-id": "",
+  "show-plan": true,
+  "active-session-id": "s1",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Range les PDF de Téléchargements dans Documents/PDF",
+      "thinking": "",
+      "streaming": false,
+      "plan-id": "",
+      "plan-step-count": 0,
+      "content-plain": "Range les PDF de Téléchargements dans Documents/PDF",
+      "blocks": [],
+      "thinking-preview": ""
+    },
+    {
+      "role": "system",
+      "content": "Listing ~/Downloads",
+      "thinking": "",
+      "streaming": false,
+      "plan-id": "",
+      "plan-step-count": 0,
+      "content-plain": "Listing ~/Downloads",
+      "blocks": [],
+      "thinking-preview": ""
+    },
+    {
+      "role": "system",
+      "content": "Commande : find . -maxdepth 1 -type f -iname *.pdf",
+      "thinking": "",
+      "streaming": true,
+      "plan-id": "",
+      "plan-step-count": 0,
+      "content-plain": "Commande : find . -maxdepth 1 -type f -iname *.pdf",
+      "blocks": [],
+      "thinking-preview": ""
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "thinking": "",
+      "streaming": true,
+      "plan-id": "",
+      "plan-step-count": 0,
+      "content-plain": "",
+      "blocks": [],
+      "thinking-preview": ""
+    }
+  ],
+  "plan-steps": [
+    {
+      "step": 1,
+      "total": 2,
+      "description": "~/Documents/PDF",
+      "operation": "MKDIR",
+      "status": "pending",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    },
+    {
+      "step": 2,
+      "total": 2,
+      "description": "~/Downloads/facture-2026-08.pdf → ~/Documents/PDF/",
+      "operation": "MOVE",
+      "status": "pending",
+      "command": "",
+      "command-line": [],
+      "shell": false,
+      "cwd": "",
+      "irreversible": false,
+      "command-ran": false,
+      "exit-code": -1,
+      "stdout": "",
+      "stderr": "",
+      "output-truncated": false
+    }
+  ],
+  "sessions": [
+    {
+      "id": "s1",
+      "title": "Ranger les PDF de Téléchargements",
+      "subtitle": "",
+      "group-label": "Aujourd'hui"
+    },
+    {
+      "id": "s2",
+      "title": "Trier les téléchargements par type",
+      "subtitle": "7 étapes",
+      "group-label": ""
+    }
+  ],
+  "approval-mode": "validation",
+  "command-allowlist": [],
+  "has-approval": false,
+  "approval-request-id": "",
+  "approval-argv": [],
+  "approval-argv-class": [],
+  "approval-shell": false,
+  "approval-cwd": "",
+  "approval-program": "",
+  "approval-origin": "",
+  "approval-rememberable": false
+}

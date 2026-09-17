@@ -1,0 +1,29 @@
+[package]
+name = "lito-app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+slint = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+lito-protocol = { path = "../protocol" }
+lito-ui = { path = "../ui" }
+lito-agent = { path = "../agent" }
+lito-fs = { path = "../fs" }
+lito-llm = { path = "../llm" }
+lito-memory = { path = "../memory" }
+lito-policy = { path = "../policy" }
+lito-exec = { path = "../exec" }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+serde_json = { workspace = true }
+chrono = "0.4"
+dirs = "5.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+i-slint-backend-winit = { workspace = true }
+winit = { workspace = true }
