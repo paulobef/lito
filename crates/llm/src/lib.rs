@@ -533,7 +533,10 @@ mod tests {
     use super::*;
     use tokio::test;
 
+    // Requires a live Ollama server on localhost:11434 with `qwen3.5:4b` pulled - not mocked yet
+    // (see roadmap P0.4), so it can't run in CI. Run it locally with `cargo test -- --ignored`.
     #[test]
+    #[ignore]
     async fn test_ollama_client() {
         let client = OllamaClient::new("http://localhost:11434", "qwen3.5:4b");
         assert!(client.health_check().await);

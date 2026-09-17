@@ -105,7 +105,12 @@ apparaissent dans `git status`. Mets le projet sous contrôle de version proprem
 Ne committe rien d'autre que le contenu du dépôt actuel, et montre-moi `git status` avant et après.
 ```
 
-#### P0.2 — CI GitHub Actions (S)
+#### P0.2 — CI GitHub Actions (S) ✅ fait le 2026-09-17
+
+`.github/workflows/ci.yml` : job `check` (fmt/clippy/test/build) + job `ui` (`make ui-check` +
+`make ui-shot`, PNG en artefact), tous deux sur `macos-latest` avec `Swatinem/rust-cache`.
+`crates/llm::test_ollama_client` marqué `#[ignore]` (voir P0.4 pour le mock). `make ci` reproduit
+le job `check` en local. Workflow validé avec `actionlint`.
 
 **Pourquoi** — Aucune vérification automatique n'existe. Les cibles `make` sont bonnes mais
 dépendent de la discipline manuelle.

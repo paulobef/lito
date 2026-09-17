@@ -1,6 +1,6 @@
 # Lito v2 Makefile - Rust + Slint build
 
-.PHONY: build run clean check fmt clippy ui-check ui-shot ui-watch install-viewer
+.PHONY: build run clean check fmt clippy ci ui-check ui-shot ui-watch install-viewer
 
 SLINT_UI  := crates/ui/ui/app-window.slint
 FIXTURES  := crates/ui/ui/fixtures
@@ -49,6 +49,13 @@ docs:
 # Run tests
 test:
 	cargo test --workspace
+
+# Reproduce the CI "check" job locally
+ci:
+	cargo fmt --all -- --check
+	cargo clippy --workspace -- -D warnings
+	cargo test --workspace
+	cargo build --release
 
 # Package for macOS (creates .app bundle)
 package:
@@ -113,6 +120,7 @@ help:
 	@echo "  clippy      - Run linter"
 	@echo "  docs        - Build documentation"
 	@echo "  test        - Run tests"
+	@echo "  ci          - Reproduce the CI 'check' job locally (fmt/clippy/test/build)"
 	@echo "  ui-check    - Type-check the .slint file alone (fast)"
 	@echo "  ui-shot     - Render the UI to PNGs with fixture data (look at them!)"
 	@echo "  ui-watch    - Live-reloading preview of the .slint file"

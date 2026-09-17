@@ -1534,6 +1534,42 @@ trop longue pour vérifier l'absence de débordement hors fenêtre).
 **Docs mises à jour dans le même changement** : `summary.md` (nouvelle ligne « Coloration
 syntaxique »).
 
+### 43. Mise sous git et CI GitHub Actions — P0.1/P0.2 (2026-09-17)
+
+Premiers items de la Phase 0 du roadmap (« pouvoir changer le code sans peur »). Le dépôt n'avait
+aucun commit et pas de `.gitignore` malgré 42 entrées d'historique existant uniquement dans le
+working tree.
+
+**P0.1** : `.gitignore` (`/target`, `.DS_Store`, `.idea/`, `__pycache__/`, sorties
+`ui-shot`/`package`/`dmg`, `.claude/settings.local.json` — config machine-spécifique).
+`Cargo.lock` versionné volontairement (fige le skew Slint 1.6→1.17.1 documenté dans CLAUDE.md).
+`documentation/slint-docs/` (3,6 Mo / 417 fichiers) versionné plutôt qu'ignoré : référencé
+directement par CLAUDE.md et le skill `slint-lito`, aucun script pour le régénérer, taille
+négligeable pour git. Premier commit `d7bfc83` (504 fichiers). `CONTRIBUTING.md` ajouté (cibles
+`make` à lancer avant de committer, convention de message, rappel de mise à jour de
+`documentation/lito/` dans le même changement).
+
+**P0.2** : `.github/workflows/ci.yml`, deux jobs sur `macos-latest` (push + pull_request), cache
+`Swatinem/rust-cache` :
+- `check` : `cargo fmt --all -- --check`, `cargo clippy --workspace -- -D warnings`,
+  `cargo test --workspace`, `cargo build --release`.
+- `ui` : installe `slint-viewer` épinglé (`^1.17 --locked`, même commande que `make
+  install-viewer`), lance `make ui-check` puis `make ui-shot`, publie `target/ui-shots/*.png` en
+  artefact de build pour relecture visuelle depuis la PR.
+
+`crates/llm::test_ollama_client` marqué `#[ignore]` (nécessite un Ollama local sur
+`localhost:11434`, non mocké — voir P0.4) : sans ça la CI échouait à coup sûr. Nouvelle cible
+`make ci` (fmt-check + clippy + test + build) qui reproduit le job `check` en local. Workflow
+validé avec `actionlint` (installé via `brew install actionlint`, exit 0).
+
+Vérifié : `cargo fmt --all -- --check`, `cargo clippy --workspace -- -D warnings`,
+`cargo test --workspace` (23 tests, 1 ignoré), `cargo build --release` et `make ui-check` tous
+verts en local avant de committer le workflow.
+
+**Docs mises à jour dans le même changement** : `roadmap.md` (P0.1 et P0.2 cochés),
+`summary.md` (ligne d'état CI, note sur `test_ollama_client`), `CONTRIBUTING.md` (mention de
+`make ci` et de `#[ignore]`).
+
 ---
 
 *Fin de l'historique — Projet Lito*
