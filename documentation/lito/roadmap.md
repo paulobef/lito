@@ -67,7 +67,13 @@ temps plein). Chaque prompt suppose que Claude Code démarre à la racine du dé
 
 *Objectif : pouvoir changer le code sans peur. Rien d'autre ne devrait être entrepris avant.*
 
-#### P0.1 — Mettre le projet sous git (S)
+#### P0.1 — Mettre le projet sous git (S) ✅ fait le 2026-09-17
+
+Commit racine `d7bfc83` : `.gitignore` (Rust+Slint/macOS, `Cargo.lock` versionné volontairement),
+`documentation/slint-docs/` versionné (3.6 Mo/417 fichiers, référencé directement par CLAUDE.md et
+le skill `slint-lito`, pas de script pour le régénérer, taille négligeable), `CONTRIBUTING.md`
+ajouté. `.claude/settings.local.json` ignoré (config machine-spécifique) ; `.claude/settings.json`
+versionné.
 
 **Pourquoi** — `git log` échoue : `main` n'a aucun commit. Tout le travail décrit dans
 `history.md` (25 entrées) existe uniquement dans le working tree. Un `rm -rf` malheureux, ou un
